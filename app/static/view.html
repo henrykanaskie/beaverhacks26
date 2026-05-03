@@ -538,6 +538,8 @@
       color: var(--red); font-size: 12.5px;
     }
 
+    .system-node { cursor: pointer; }
+
     /* ── System tab ── */
     #layer-system { background: var(--bg-main); }
     #system-toolbar {
@@ -1594,101 +1596,7 @@ function narrativeRender(data, bubble) {
 
   function renderZoomDetail(zd) {
     zoomPanel.innerHTML = "";
-    const panel = document.createElement("div");
-    panel.className = "zoom-panel";
-
-    const header = document.createElement("div");
-    header.className = "zoom-panel-header";
-    const title = document.createElement("span");
-    title.className = "zoom-panel-title";
-    title.textContent = zd.component_label || zd.component_id || "Component";
-    const kind = document.createElement("span");
-    kind.className = "zoom-panel-kind";
-    kind.textContent = zd.component_kind || "";
-    const closeBtn = document.createElement("button");
-    closeBtn.className = "zoom-panel-close";
-    closeBtn.innerHTML = `<span>⤡</span><span>Zoom out</span>`;
-    closeBtn.addEventListener("click", closeZoomPanel);
-    header.append(title, kind, closeBtn);
-    panel.appendChild(header);
-
-    const body = document.createElement("div");
-    body.className = "zoom-panel-body";
-    const zoomCitations = (zd.citations || []).map(c => ({
-      path: c.file_path, start_line: c.start_line, end_line: c.end_line || c.start_line,
-    }));
-    body.innerHTML = formatAnswer(zd.deep_dive || "", zoomCitations);
-    body.querySelectorAll(".inline-cite").forEach(chip => {
-      chip.addEventListener("click", () =>
-        openCodeViewer(chip.dataset.path, +chip.dataset.start, +chip.dataset.end));
-    });
-    panel.appendChild(body);
-
-    if ((zd.involved_files || []).length) {
-      const sec = document.createElement("div");
-      sec.className = "zoom-section";
-      const t = document.createElement("div");
-      t.className = "zoom-section-title"; t.textContent = "Files";
-      const row = document.createElement("div");
-      row.className = "zoom-chip-row";
-      zd.involved_files.forEach(f => {
-        const chip = document.createElement("span");
-        chip.className = "zoom-chip clickable";
-        const path = document.createElement("span");
-        const fEndStr = f.end_line && f.end_line !== f.start_line ? `-${f.end_line}` : "";
-        path.textContent = f.start_line ? `${f.file_path}:${f.start_line}${fEndStr}` : f.file_path;
-        chip.appendChild(path);
-        if (f.role) {
-          const r = document.createElement("span");
-          r.className = "zoom-chip-role";
-          r.textContent = "— " + f.role;
-          chip.appendChild(r);
-        }
-        chip.addEventListener("click", () => openCodeViewer(f.file_path, f.start_line || null, f.end_line || f.start_line || null));
-        row.appendChild(chip);
-      });
-      sec.append(t, row);
-      panel.appendChild(sec);
-    }
-
-    if ((zd.tools || []).length) {
-      const sec = document.createElement("div");
-      sec.className = "zoom-section";
-      const t = document.createElement("div");
-      t.className = "zoom-section-title"; t.textContent = "Tools & libraries";
-      const row = document.createElement("div");
-      row.className = "zoom-chip-row";
-      zd.tools.forEach(tool => {
-        const chip = document.createElement("span");
-        chip.className = "zoom-chip tool";
-        chip.textContent = tool;
-        row.appendChild(chip);
-      });
-      sec.append(t, row);
-      panel.appendChild(sec);
-    }
-
-    if ((zd.citations || []).length) {
-      const sec = document.createElement("div");
-      sec.className = "zoom-section";
-      const t = document.createElement("div");
-      t.className = "zoom-section-title"; t.textContent = "Citations";
-      const row = document.createElement("div");
-      row.className = "zoom-chip-row";
-      zd.citations.forEach(c => {
-        const chip = document.createElement("span");
-        chip.className = "zoom-chip clickable";
-        const cEnd = c.end_line || c.start_line || null;
-        const cEndStr = cEnd && cEnd !== c.start_line ? `-${cEnd}` : "";
-        chip.textContent = c.start_line ? `${c.file_path}:${c.start_line}${cEndStr}` : c.file_path;
-        chip.addEventListener("click", () => openCodeViewer(c.file_path, c.start_line || null, cEnd));
-        row.appendChild(chip);
-      });
-      sec.append(t, row);
-      panel.appendChild(sec);
-    }
-
-    zoomPanel.appendChild(panel);
+    zoomPanel.appendChild(buildZoomPanelEl(zd, closeZoomPanel));
   }
 
   function updateZoomButton(step) {
@@ -2184,6 +2092,181 @@ initArch({ id: "/", name: REPO_LABEL, type: "folder", children: [] });
   } catch (_) { /* arch stays empty — not critical */ }
 })();
 
+// ── Shared zoom-panel rendering ───────────────────────────────────────────────
+
+function buildZoomPanelEl(zd, onClose) {
+  const panel = document.createElement("div");
+  panel.className = "zoom-panel";
+
+  const header = document.createElement("div");
+  header.className = "zoom-panel-header";
+  const title = document.createElement("span");
+  title.className = "zoom-panel-title";
+  title.textContent = zd.component_label || zd.component_id || "Component";
+  const kind = document.createElement("span");
+  kind.className = "zoom-panel-kind";
+  kind.textContent = zd.component_kind || "";
+  header.append(title, kind);
+  if (onClose) {
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "zoom-panel-close";
+    closeBtn.innerHTML = `<span>⤡</span><span>Zoom out</span>`;
+    closeBtn.addEventListener("click", onClose);
+    header.appendChild(closeBtn);
+  }
+  panel.appendChild(header);
+
+  const body = document.createElement("div");
+  body.className = "zoom-panel-body";
+  const zoomCitations = (zd.citations || []).map(c => ({
+    path: c.file_path, start_line: c.start_line, end_line: c.end_line || c.start_line,
+  }));
+  body.innerHTML = formatAnswer(zd.deep_dive || "", zoomCitations);
+  body.querySelectorAll(".inline-cite").forEach(chip => {
+    chip.addEventListener("click", () =>
+      openCodeViewer(chip.dataset.path, +chip.dataset.start, +chip.dataset.end));
+  });
+  panel.appendChild(body);
+
+  // Tech stack first — it's the most-asked-for at-a-glance info.
+  {
+    const sec = document.createElement("div");
+    const t = document.createElement("div");
+    t.className = "zoom-section-title"; t.textContent = "Tech stack";
+    const row = document.createElement("div");
+    row.className = "zoom-chip-row";
+    const tools = zd.tools || [];
+    if (tools.length) {
+      tools.forEach(tool => {
+        const chip = document.createElement("span");
+        chip.className = "zoom-chip tool";
+        chip.textContent = tool;
+        row.appendChild(chip);
+      });
+    } else {
+      const empty = document.createElement("span");
+      empty.className = "zoom-chip-role";
+      empty.textContent = "(none detected)";
+      row.appendChild(empty);
+    }
+    sec.append(t, row);
+    panel.appendChild(sec);
+  }
+
+  if ((zd.involved_files || []).length) {
+    const sec = document.createElement("div");
+    const t = document.createElement("div");
+    t.className = "zoom-section-title"; t.textContent = "Files";
+    const row = document.createElement("div");
+    row.className = "zoom-chip-row";
+    zd.involved_files.forEach(f => {
+      const chip = document.createElement("span");
+      chip.className = "zoom-chip clickable";
+      const path = document.createElement("span");
+      const fEndStr = f.end_line && f.end_line !== f.start_line ? `-${f.end_line}` : "";
+      path.textContent = f.start_line ? `${f.file_path}:${f.start_line}${fEndStr}` : f.file_path;
+      chip.appendChild(path);
+      if (f.role) {
+        const r = document.createElement("span");
+        r.className = "zoom-chip-role";
+        r.textContent = "— " + f.role;
+        chip.appendChild(r);
+      }
+      chip.addEventListener("click", () => openCodeViewer(f.file_path, f.start_line || null, f.end_line || f.start_line || null));
+      row.appendChild(chip);
+    });
+    sec.append(t, row);
+    panel.appendChild(sec);
+  }
+
+  if ((zd.citations || []).length) {
+    const sec = document.createElement("div");
+    const t = document.createElement("div");
+    t.className = "zoom-section-title"; t.textContent = "Citations";
+    const row = document.createElement("div");
+    row.className = "zoom-chip-row";
+    zd.citations.forEach(c => {
+      const chip = document.createElement("span");
+      chip.className = "zoom-chip clickable";
+      const cEnd = c.end_line || c.start_line || null;
+      const cEndStr = cEnd && cEnd !== c.start_line ? `-${cEnd}` : "";
+      chip.textContent = c.start_line ? `${c.file_path}:${c.start_line}${cEndStr}` : c.file_path;
+      chip.addEventListener("click", () => openCodeViewer(c.file_path, c.start_line || null, cEnd));
+      row.appendChild(chip);
+    });
+    sec.append(t, row);
+    panel.appendChild(sec);
+  }
+
+  return panel;
+}
+
+// Click-to-zoom: render the deep-dive into a chat bubble (instead of an
+// overlay on the diagram). Works whether or not narrative mode is active.
+const _systemZoomReq = { id: 0 };
+const _systemZoomCache = new Map();  // componentId -> zoom response (client-side cache for instant replay)
+
+function _appendZoomBubble() {
+  const wrap = document.createElement("div");
+  wrap.className = "msg msg-assistant";
+  const label = document.createElement("span");
+  label.className = "msg-label";
+  label.textContent = "AccliMate";
+  wrap.appendChild(label);
+  const bubble = document.createElement("div");
+  bubble.className = "bubble";
+  wrap.appendChild(bubble);
+  messagesEl.appendChild(wrap);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+  return bubble;
+}
+
+function _renderZoomIntoBubble(bubble, zd) {
+  bubble.innerHTML = "";
+  // No "Zoom out" button in the chat — the chat history is durable.
+  bubble.appendChild(buildZoomPanelEl(zd, null));
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+async function openSystemZoomPanel(componentId) {
+  if (!REPO_ID || !componentId) return;
+
+  if (window.__systemDiagram) window.__systemDiagram.zoomToNode(componentId);
+
+  // Instant path: cached response goes straight into a fresh bubble.
+  if (_systemZoomCache.has(componentId)) {
+    const bubble = _appendZoomBubble();
+    _renderZoomIntoBubble(bubble, _systemZoomCache.get(componentId));
+    return;
+  }
+
+  const bubble = _appendZoomBubble();
+  bubble.innerHTML = `<div class="zoom-loading">Loading component details…</div>`;
+
+  const reqId = ++_systemZoomReq.id;
+  try {
+    const res = await fetch(`${API}/zoom/${encodeURIComponent(REPO_ID)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ component_id: componentId }),
+    });
+    const zd = await res.json();
+    // Only the latest request wins — earlier in-flight clicks are dropped.
+    if (reqId !== _systemZoomReq.id) return;
+    if (!res.ok) {
+      const d = zd && zd.detail;
+      const msg = typeof d === "string" ? d : (d && d.message) ? d.message : "Zoom failed";
+      bubble.innerHTML = `<div class="zoom-error">${esc(msg)}</div>`;
+      return;
+    }
+    _systemZoomCache.set(componentId, zd);
+    _renderZoomIntoBubble(bubble, zd);
+  } catch (err) {
+    if (reqId !== _systemZoomReq.id) return;
+    bubble.innerHTML = `<div class="zoom-error">${esc(String(err.message || err))}</div>`;
+  }
+}
+
 // ── System diagram (logical components) ───────────────────────────────────────
 
 (function initSystemDiagram() {
@@ -2330,12 +2413,16 @@ initArch({ id: "/", name: REPO_LABEL, type: "folder", children: [] });
       .append("g")
       .attr("class", "system-node")
       .attr("data-id", d => d.id)
-      .style("cursor", "grab")
       .call(d3.drag()
+        .clickDistance(4)
         .on("start", (e, d) => { if (!e.active) _sysSim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
         .on("drag",  (e, d) => { d.fx = e.x; d.fy = e.y; })
         .on("end",   (e, d) => { if (!e.active) _sysSim.alphaTarget(0); d.fx = null; d.fy = null; })
-      );
+      )
+      .on("click", (e, d) => {
+        e.stopPropagation();
+        openSystemZoomPanel(d.id);
+      });
 
     _sysNodes.append("rect")
       .attr("rx", 8).attr("ry", 8)
@@ -2476,13 +2563,13 @@ initArch({ id: "/", name: REPO_LABEL, type: "folder", children: [] });
     // Center the node in the viewport at the requested scale.
     const tx = W / 2 - d.x * scale;
     const ty = H / 2 - d.y * scale;
-    _sysSvg.transition().duration(600)
+    _sysSvg.transition().duration(280)
       .call(_sysZoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
   }
 
   function resetZoom() {
     if (!_sysSvg || !_sysZoom) return;
-    _sysSvg.transition().duration(500)
+    _sysSvg.transition().duration(220)
       .call(_sysZoom.transform, d3.zoomIdentity);
   }
 
