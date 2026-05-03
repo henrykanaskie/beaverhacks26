@@ -11,13 +11,13 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg-deep:    #16161e;
-      --bg-main:    #1e1e2e;
-      --bg-raised:  #24243a;
-      --bg-hover:   #2d2d45;
-      --bg-active:  #333350;
-      --border:     rgba(255,255,255,0.07);
-      --border-md:  rgba(255,255,255,0.12);
+      --bg-deep:   #16161e;
+      --bg-main:   #1e1e2e;
+      --bg-raised: #24243a;
+      --bg-hover:  #2d2d45;
+      --bg-active: #333350;
+      --border:    rgba(255,255,255,0.07);
+      --border-md: rgba(255,255,255,0.12);
       --text-1: #e4e4f0;
       --text-2: #9898b8;
       --text-3: #55556a;
@@ -31,8 +31,11 @@
       --font-code: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
     }
 
-    html, body { height: 100%; overflow: hidden; background: var(--bg-main);
-      color: var(--text-1); font-family: var(--font-ui); font-size: 14px; line-height: 1.5; }
+    html, body {
+      height: 100%; overflow: hidden;
+      background: var(--bg-main); color: var(--text-1);
+      font-family: var(--font-ui); font-size: 14px; line-height: 1.5;
+    }
 
     /* ── Top bar ── */
     #topbar {
@@ -40,39 +43,30 @@
       border-bottom: 1px solid var(--border);
       display: flex; align-items: center; padding: 0 16px; gap: 10px; flex-shrink: 0;
     }
-    #topbar .logo { font-size: 13px; font-weight: 600; color: var(--purple); letter-spacing: .02em; }
-    #topbar .sep  { color: var(--text-3); }
-    #topbar .repo { font-family: var(--font-code); font-size: 12px; color: var(--text-2); }
-    #topbar .badge {
+    .logo { font-size: 13px; font-weight: 600; color: var(--purple); letter-spacing: .02em; }
+    .repo { font-family: var(--font-code); font-size: 12px; color: var(--text-2); }
+    .sep  { color: var(--text-3); }
+    .demo-pill {
+      font-size: 11px; padding: 2px 8px; border-radius: 4px;
+      background: rgba(224,175,104,.12); color: var(--yellow);
+      border: 1px solid rgba(224,175,104,.22);
+    }
+    .indexed-badge {
       margin-left: auto; font-size: 11px; font-family: var(--font-code);
       padding: 2px 8px; border-radius: 4px;
       background: rgba(158,206,106,.12); color: var(--green);
       border: 1px solid rgba(158,206,106,.22);
     }
-    #topbar .demo-pill {
-      font-size: 11px; padding: 2px 8px; border-radius: 4px;
-      background: rgba(224,175,104,.12); color: var(--yellow);
-      border: 1px solid rgba(224,175,104,.22);
-    }
 
     /* ── Shell ── */
     #app { display: flex; height: calc(100vh - 40px); overflow: hidden; }
 
-    /* ── Panes ── */
+    /* ── Left pane — chat ── */
     #left-pane {
-      width: 38%; min-width: 260px; max-width: 58%;
+      width: 38%; min-width: 260px; max-width: 58%; flex-shrink: 0;
       display: flex; flex-direction: column;
-      background: var(--bg-raised); border-right: 1px solid var(--border);
-      overflow: hidden; flex-shrink: 0;
+      background: var(--bg-raised); border-right: 1px solid var(--border); overflow: hidden;
     }
-    #divider {
-      width: 4px; cursor: col-resize; background: transparent; flex-shrink: 0;
-      transition: background .15s;
-    }
-    #divider:hover, #divider.dragging { background: var(--blue); }
-    #right-pane { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
-
-    /* ── Chat header ── */
     #chat-header {
       padding: 10px 16px; border-bottom: 1px solid var(--border);
       display: flex; align-items: center; gap: 8px; flex-shrink: 0;
@@ -89,7 +83,6 @@
     }
     .scope-pill:hover { background: rgba(122,162,247,.18); }
 
-    /* ── Messages ── */
     #messages {
       flex: 1; overflow-y: auto; padding: 16px;
       display: flex; flex-direction: column; gap: 18px;
@@ -112,25 +105,30 @@
     }
     .msg-assistant .bubble code {
       font-family: var(--font-code); font-size: 12px;
-      background: rgba(255,255,255,.07); padding: 1px 5px; border-radius: 3px;
-      color: var(--cyan);
+      background: rgba(255,255,255,.07); padding: 1px 5px; border-radius: 3px; color: var(--cyan);
     }
 
     .citations { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
     .cite-chip {
-      font-family: var(--font-code); font-size: 11px;
-      padding: 3px 9px; border-radius: 4px;
+      font-family: var(--font-code); font-size: 11px; padding: 3px 9px; border-radius: 4px;
       background: rgba(125,207,255,.08); border: 1px solid rgba(125,207,255,.2);
-      color: var(--cyan); cursor: pointer; white-space: nowrap;
-      transition: background .12s, border-color .12s;
+      color: var(--cyan); cursor: pointer; white-space: nowrap; transition: background .12s, border-color .12s;
     }
     .cite-chip:hover { background: rgba(125,207,255,.18); border-color: rgba(125,207,255,.4); }
 
+    .trace-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-family: var(--font-code); font-size: 11px; padding: 3px 9px; border-radius: 4px;
+      background: rgba(247,118,142,.08); border: 1px solid rgba(247,118,142,.2);
+      color: var(--red); cursor: pointer; white-space: nowrap; margin-top: 10px;
+      transition: background .12s, border-color .12s;
+    }
+    .trace-chip:hover { background: rgba(247,118,142,.18); border-color: rgba(247,118,142,.4); }
+
     .thinking {
-      display: flex; gap: 4px; align-items: center;
-      padding: 12px 14px; background: var(--bg-active);
-      border: 1px solid var(--border-md); border-radius: 2px 12px 12px 12px;
-      align-self: flex-start;
+      display: flex; gap: 4px; align-items: center; padding: 12px 14px;
+      background: var(--bg-active); border: 1px solid var(--border-md);
+      border-radius: 2px 12px 12px 12px; align-self: flex-start;
     }
     .thinking span {
       width: 6px; height: 6px; border-radius: 50%;
@@ -138,12 +136,11 @@
     }
     .thinking span:nth-child(2) { animation-delay: .2s; }
     .thinking span:nth-child(3) { animation-delay: .4s; }
-    @keyframes blink { 0%,60%,100% { opacity: .25; } 30% { opacity: 1; } }
+    @keyframes blink { 0%,60%,100% { opacity:.25; } 30% { opacity:1; } }
 
-    /* ── Input ── */
     #input-area {
-      border-top: 1px solid var(--border);
-      padding: 12px 16px; display: flex; flex-direction: column; gap: 6px; flex-shrink: 0;
+      border-top: 1px solid var(--border); padding: 12px 16px;
+      display: flex; flex-direction: column; gap: 6px; flex-shrink: 0;
     }
     #input-wrap {
       display: flex; align-items: flex-end; gap: 8px;
@@ -159,43 +156,87 @@
     #chat-input::placeholder { color: var(--text-3); }
     #send-btn {
       background: var(--blue); color: #16161e; border: none; border-radius: 5px;
-      width: 30px; height: 30px; cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 15px; flex-shrink: 0; transition: opacity .15s;
+      width: 30px; height: 30px; cursor: pointer; display: flex; align-items: center;
+      justify-content: center; font-size: 15px; flex-shrink: 0; transition: opacity .15s;
     }
     #send-btn:hover { opacity: .82; }
     #send-btn:disabled { opacity: .35; cursor: default; }
     #input-hint { font-size: 11px; color: var(--text-3); }
 
-    /* ── Canvas tabs ── */
-    #canvas-tabs {
-      display: flex; align-items: center;
-      background: var(--bg-deep); border-bottom: 1px solid var(--border);
-      padding: 0 4px; height: 38px; gap: 2px; flex-shrink: 0;
+    /* ── Divider ── */
+    #divider {
+      width: 4px; cursor: col-resize; background: transparent; flex-shrink: 0; transition: background .15s;
     }
-    .tab-btn {
-      background: none; border: none; color: var(--text-3);
-      font-family: var(--font-ui); font-size: 12px; font-weight: 500;
-      padding: 5px 12px; cursor: pointer; border-radius: 4px;
-      transition: color .12s, background .12s;
+    #divider:hover, #divider.dragging { background: var(--blue); }
+
+    /* ── Right pane — canvas ── */
+    #right-pane { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+
+    /* Canvas tab bar */
+    #ctx-bar {
+      height: 36px; background: var(--bg-deep); border-bottom: 1px solid var(--border);
+      display: flex; align-items: stretch; padding: 0 4px; gap: 2px; flex-shrink: 0;
+    }
+    .ctx-tab {
       display: flex; align-items: center; gap: 6px;
+      padding: 0 12px; border: none; background: none; cursor: pointer;
+      font-family: var(--font-ui); font-size: 12px; font-weight: 500;
+      color: var(--text-3); border-radius: 4px; margin: 4px 0;
+      transition: color .12s, background .12s; white-space: nowrap;
     }
-    .tab-btn:hover { color: var(--text-1); background: var(--bg-hover); }
-    .tab-btn.active { color: var(--blue); background: rgba(122,162,247,.1); }
-
-    .canvas-panel { display: none; flex: 1; overflow: hidden; }
-    .canvas-panel.active { display: flex; flex-direction: column; }
-
-    /* ── Welcome ── */
-    #welcome-state {
-      flex: 1; display: flex; align-items: center; justify-content: center;
-      flex-direction: column; gap: 14px; color: var(--text-3);
+    .ctx-tab:hover { color: var(--text-1); background: var(--bg-hover); }
+    .ctx-tab.active { color: var(--blue); background: rgba(122,162,247,.1); }
+    .ctx-tab .tab-close {
+      font-size: 13px; color: var(--text-3); line-height: 1;
+      padding: 0 0 0 2px; transition: color .12s;
     }
-    #welcome-state .icon { font-size: 42px; opacity: .25; }
-    #welcome-state p { font-size: 13px; text-align: center; max-width: 260px; line-height: 1.6; }
+    .ctx-tab .tab-close:hover { color: var(--red); }
+    /* code overlay back button */
+    #ctx-back {
+      display: none; align-items: center; gap: 5px;
+      padding: 0 12px; border: none; background: none; cursor: pointer;
+      font-family: var(--font-ui); font-size: 12px; color: var(--text-2);
+      border-right: 1px solid var(--border); flex-shrink: 0;
+      transition: color .12s, background .12s;
+    }
+    #ctx-back:hover { color: var(--text-1); background: var(--bg-hover); }
+    #ctx-back.visible { display: flex; }
+    #ctx-code-label {
+      font-family: var(--font-code); font-size: 11.5px; color: var(--text-2);
+      padding: 0 8px; display: none; align-items: center;
+    }
+    #ctx-code-label.visible { display: flex; }
+    #ctx-code-label .hl  { color: var(--cyan); }
+    #ctx-code-label .dim { color: var(--text-3); }
+
+    /* Canvas layers — all stacked, only one visible */
+    .canvas-layer {
+      position: absolute; inset: 36px 0 0 0;
+      display: flex; flex-direction: column; overflow: hidden;
+      opacity: 0; pointer-events: none;
+      transition: opacity .18s ease, transform .18s ease;
+      transform: translateY(6px);
+    }
+    .canvas-layer.active {
+      opacity: 1; pointer-events: all; transform: translateY(0);
+    }
+
+    /* ── Architecture ── */
+    #layer-arch { background: var(--bg-main); }
+    #arch-toolbar {
+      position: absolute; top: 10px; right: 12px;
+      display: flex; gap: 6px; z-index: 5;
+    }
+    .arch-btn {
+      background: var(--bg-raised); border: 1px solid var(--border-md);
+      color: var(--text-2); font-size: 11px; font-family: var(--font-ui);
+      padding: 4px 10px; border-radius: 4px; cursor: pointer; transition: background .12s;
+    }
+    .arch-btn:hover { background: var(--bg-hover); color: var(--text-1); }
+    #arch-svg { width: 100%; height: 100%; display: block; }
 
     /* ── Code viewer ── */
-    #code-viewer { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+    #layer-code { background: var(--bg-main); }
     #code-header {
       background: var(--bg-deep); border-bottom: 1px solid var(--border);
       padding: 7px 16px; display: flex; align-items: center; gap: 10px; flex-shrink: 0;
@@ -205,8 +246,7 @@
     #code-lang-badge {
       margin-left: auto; font-family: var(--font-code); font-size: 10px;
       padding: 2px 6px; border-radius: 3px;
-      background: rgba(122,162,247,.1); color: var(--blue);
-      border: 1px solid rgba(122,162,247,.2);
+      background: rgba(122,162,247,.1); color: var(--blue); border: 1px solid rgba(122,162,247,.2);
     }
     #code-scroll {
       flex: 1; overflow: auto;
@@ -223,65 +263,45 @@
       flex: 1; padding-right: 32px;
       font-family: var(--font-code); font-size: 12.5px; line-height: 1.72;
     }
-    .line-hl {
-      background: rgba(224,175,104,.1);
-      border-left: 2px solid var(--yellow);
-    }
-    .line-hl .line-num { color: var(--yellow); padding-left: 2px; }
+    .line-hl { background: rgba(224,175,104,.1); border-left: 2px solid var(--yellow); }
+    .line-hl .line-num { color: var(--yellow); }
 
-    /* Prism overrides */
     code[class*="language-"], pre[class*="language-"] {
       background: transparent !important; font-family: var(--font-code) !important;
-      font-size: 12.5px !important; line-height: 1.72 !important;
-      text-shadow: none !important;
+      font-size: 12.5px !important; line-height: 1.72 !important; text-shadow: none !important;
     }
 
-    /* ── Architecture ── */
-    #arch-panel { flex: 1; overflow: hidden; position: relative; }
-    #arch-toolbar {
-      position: absolute; top: 12px; right: 12px;
-      display: flex; gap: 6px; z-index: 5;
-    }
-    .arch-btn {
-      background: var(--bg-raised); border: 1px solid var(--border-md);
-      color: var(--text-2); font-size: 11px; font-family: var(--font-ui);
-      padding: 4px 10px; border-radius: 4px; cursor: pointer; transition: background .12s;
-    }
-    .arch-btn:hover { background: var(--bg-hover); color: var(--text-1); }
-    #arch-svg { width: 100%; height: 100%; }
-
-    /* ── Trace ── */
+    /* ── Trace view ── */
+    #layer-trace { background: var(--bg-main); }
     #trace-inner {
-      flex: 1; overflow-y: auto; padding: 20px;
+      flex: 1; overflow-y: auto; padding: 24px;
       scrollbar-width: thin; scrollbar-color: var(--bg-hover) transparent;
     }
-    .trace-title {
+    .trace-section-title {
       font-size: 11px; font-weight: 600; text-transform: uppercase;
-      letter-spacing: .08em; color: var(--text-2); margin-bottom: 8px;
+      letter-spacing: .08em; color: var(--text-2); margin-bottom: 10px;
     }
-    .trace-source {
-      font-family: var(--font-code); font-size: 12.5px; color: var(--cyan);
-      padding: 6px 12px; background: rgba(125,207,255,.07);
-      border-radius: 5px; border-left: 3px solid var(--cyan);
-      margin-bottom: 16px;
+    .trace-source-box {
+      font-family: var(--font-code); font-size: 13px; color: var(--cyan);
+      padding: 8px 14px; background: rgba(125,207,255,.07);
+      border-radius: 6px; border-left: 3px solid var(--cyan); margin-bottom: 20px;
     }
-    .trace-count { font-size: 12px; color: var(--text-2); margin-bottom: 12px; }
-    .trace-list { display: flex; flex-direction: column; gap: 6px; }
+    .trace-count { font-size: 12px; color: var(--text-2); margin-bottom: 14px; }
+    .trace-list { display: flex; flex-direction: column; gap: 7px; }
     .trace-item {
-      display: flex; align-items: center; gap: 10px;
-      padding: 9px 12px; background: var(--bg-raised);
-      border: 1px solid var(--border); border-radius: 6px;
+      display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+      background: var(--bg-raised); border: 1px solid var(--border); border-radius: 7px;
       cursor: pointer; transition: border-color .12s, background .12s;
     }
     .trace-item:hover { border-color: var(--border-md); background: var(--bg-hover); }
     .trace-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
-    .trace-dot.direct    { background: var(--red); }
+    .trace-dot.direct     { background: var(--red); }
     .trace-dot.transitive { background: var(--yellow); }
     .trace-path { font-family: var(--font-code); font-size: 12px; color: var(--text-1); }
     .trace-badge {
       margin-left: auto; font-size: 10px; padding: 2px 7px; border-radius: 3px;
     }
-    .trace-badge.direct    { background: rgba(247,118,142,.12); color: var(--red);    border: 1px solid rgba(247,118,142,.22); }
+    .trace-badge.direct     { background: rgba(247,118,142,.12); color: var(--red);    border: 1px solid rgba(247,118,142,.22); }
     .trace-badge.transitive { background: rgba(224,175,104,.12); color: var(--yellow); border: 1px solid rgba(224,175,104,.22); }
 
     ::-webkit-scrollbar { width: 5px; height: 5px; }
@@ -295,8 +315,8 @@
   <span class="logo">⬡ Nemotron RAG</span>
   <span class="sep">/</span>
   <span class="repo">pallets / flask</span>
-  <span class="demo-pill">demo data</span>
-  <span class="badge">● 83 files indexed</span>
+  <span class="demo-pill">demo</span>
+  <span class="indexed-badge">● 83 files indexed</span>
 </div>
 
 <div id="app">
@@ -305,13 +325,13 @@
   <div id="left-pane">
     <div id="chat-header">
       <h2>Assistant</h2>
-      <span class="scope-pill" id="scope-label">⊙ Whole codebase</span>
+      <span class="scope-pill">⊙ Whole codebase</span>
     </div>
     <div id="messages"></div>
     <div id="input-area">
       <div id="input-wrap">
         <textarea id="chat-input" rows="1" placeholder="Ask anything about this codebase…"></textarea>
-        <button id="send-btn" title="Send (Enter)">↑</button>
+        <button id="send-btn">↑</button>
       </div>
       <span id="input-hint">Enter to send · Shift+Enter for newline</span>
     </div>
@@ -321,50 +341,47 @@
 
   <!-- RIGHT: Canvas -->
   <div id="right-pane">
-    <div id="canvas-tabs">
-      <button class="tab-btn active" data-tab="code">◧ Code</button>
-      <button class="tab-btn" data-tab="arch">⬡ Architecture</button>
-      <button class="tab-btn" data-tab="trace">⇢ Trace</button>
+
+    <!-- Tab bar + code overlay header -->
+    <div id="ctx-bar">
+      <!-- persistent tabs -->
+      <button class="ctx-tab active" id="tab-arch">⬡ Architecture</button>
+      <!-- trace tab injected by JS when a trace result arrives -->
+      <!-- code overlay controls (shown only when code layer is active) -->
+      <button id="ctx-back">← back</button>
+      <span id="ctx-code-label"></span>
+      <!-- arch toolbar, right-aligned, hidden when not on arch -->
     </div>
 
-    <!-- Code panel -->
-    <div class="canvas-panel active" id="panel-code">
-      <div id="code-viewer">
-        <div id="welcome-state">
-          <div class="icon">◧</div>
-          <p>Click a citation chip in the chat to open a file here.</p>
-        </div>
-        <div id="code-content" style="display:none;flex:1;flex-direction:column;overflow:hidden;">
-          <div id="code-header">
-            <span id="code-file-path"></span>
-            <span id="code-lang-badge"></span>
-          </div>
-          <div id="code-scroll"><div id="code-lines"></div></div>
-        </div>
+    <!-- Layer: architecture (default) -->
+    <div class="canvas-layer active" id="layer-arch">
+      <div id="arch-toolbar">
+        <button class="arch-btn" onclick="archExpandAll()">Expand all</button>
+        <button class="arch-btn" onclick="archCollapseAll()">Collapse all</button>
+        <button class="arch-btn" onclick="resetArchZoom()">Reset zoom</button>
       </div>
+      <svg id="arch-svg"></svg>
     </div>
 
-    <!-- Architecture panel -->
-    <div class="canvas-panel" id="panel-arch">
-      <div id="arch-panel">
-        <div id="arch-toolbar">
-          <button class="arch-btn" id="btn-expand">Expand all</button>
-          <button class="arch-btn" id="btn-collapse">Collapse all</button>
-          <button class="arch-btn" id="btn-reset">Reset zoom</button>
-        </div>
-        <svg id="arch-svg"></svg>
+    <!-- Layer: code viewer -->
+    <div class="canvas-layer" id="layer-code">
+      <div id="code-header">
+        <span id="code-file-path"></span>
+        <span id="code-lang-badge"></span>
       </div>
+      <div id="code-scroll"><div id="code-lines"></div></div>
     </div>
 
-    <!-- Trace panel -->
-    <div class="canvas-panel" id="panel-trace">
+    <!-- Layer: trace -->
+    <div class="canvas-layer" id="layer-trace">
       <div id="trace-inner">
-        <div class="trace-title">Dependency Trace</div>
-        <div class="trace-source">src/flask/__init__.py</div>
-        <div class="trace-count">5 file(s) import this module directly or transitively</div>
+        <div class="trace-section-title">Dependency Trace</div>
+        <div class="trace-source-box" id="trace-source-label"></div>
+        <div class="trace-count" id="trace-count-label"></div>
         <div class="trace-list" id="trace-list"></div>
       </div>
     </div>
+
   </div>
 </div>
 
@@ -375,13 +392,13 @@
 // ── Mock data ──────────────────────────────────────────────────────────────────
 
 const FILES = {
-  "src/flask/app.py": { language: "python", content: `from __future__ import annotations\nimport os, sys, typing as t\nfrom threading import Lock\nfrom .ctx import AppContext, RequestContext\nfrom .globals import _cv_app, g, request, session\nfrom .helpers import make_response, url_for\nfrom .routing import Map, MapAdapter, Rule\nfrom .sansio.app import App\n\n\nclass Flask(App):\n    """The Flask application class.\n\n    Instantiate it and use it to define routes and configure the application.\n    \"\"\"\n\n    def __init__(\n        self,\n        import_name: str,\n        static_url_path: str | None = None,\n        static_folder: str | None = \"static\",\n        template_folder: str | None = \"templates\",\n        instance_path: str | None = None,\n        root_path: str | None = None,\n    ) -> None:\n        super().__init__(\n            import_name,\n            static_url_path=static_url_path,\n            static_folder=static_folder,\n            template_folder=template_folder,\n            instance_path=instance_path,\n            root_path=root_path,\n        )\n        self._lock = Lock()\n\n    def wsgi_app(self, environ, start_response):\n        """The actual WSGI application. Wrapped by __call__ so middleware\n        can be applied without losing a reference to the app object.\n        """\n        ctx = self.request_context(environ)\n        error = None\n        try:\n            try:\n                ctx.push()\n                response = self.full_dispatch_request()\n            except Exception as e:\n                error = e\n                response = self.handle_exception(e)\n            return response(environ, start_response)\n        finally:\n            ctx.pop(error)\n\n    def route(self, rule: str, **options):\n        """Decorate a view function to register it with the given URL rule."""\n        def decorator(f):\n            endpoint = options.pop(\"endpoint\", None)\n            self.add_url_rule(rule, endpoint, f, **options)\n            return f\n        return decorator\n\n    def add_url_rule(\n        self,\n        rule: str,\n        endpoint: str | None = None,\n        view_func=None,\n        **options,\n    ) -> None:\n        """Register a URL rule. Routes are added to the URL map and\n        dispatched by the request context.\n        """\n        if endpoint is None:\n            endpoint = view_func.__name__\n        options[\"endpoint\"] = endpoint\n        methods = options.pop(\"methods\", None) or getattr(view_func, \"methods\", None) or (\"GET\",)\n        methods = {m.upper() for m in methods}\n        rule_obj = self.url_rule_class(rule, methods=methods, **options)\n        self.url_map.add(rule_obj)\n        if view_func is not None:\n            self.view_functions[endpoint] = view_func` },
+  "src/flask/app.py": { language: "python", content: `from __future__ import annotations\nimport os, sys, typing as t\nfrom threading import Lock\nfrom .ctx import AppContext, RequestContext\nfrom .globals import _cv_app, g, request, session\nfrom .helpers import make_response, url_for\nfrom .routing import Map, MapAdapter, Rule\nfrom .sansio.app import App\n\n\nclass Flask(App):\n    """The Flask application class.\n\n    Instantiate it to define routes and configure the application.\n    """\n\n    def __init__(\n        self,\n        import_name: str,\n        static_url_path: str | None = None,\n        static_folder: str | None = "static",\n        template_folder: str | None = "templates",\n        instance_path: str | None = None,\n        root_path: str | None = None,\n    ) -> None:\n        super().__init__(\n            import_name,\n            static_url_path=static_url_path,\n            static_folder=static_folder,\n            template_folder=template_folder,\n            instance_path=instance_path,\n            root_path=root_path,\n        )\n        self._lock = Lock()\n\n    def wsgi_app(self, environ, start_response):\n        """The actual WSGI app. Wrapped by __call__ so middleware\n        can be applied without losing a reference to the app object.\n        """\n        ctx = self.request_context(environ)\n        error = None\n        try:\n            try:\n                ctx.push()\n                response = self.full_dispatch_request()\n            except Exception as e:\n                error = e\n                response = self.handle_exception(e)\n            return response(environ, start_response)\n        finally:\n            ctx.pop(error)\n\n    def route(self, rule: str, **options):\n        """Decorate a view function to register it with the given URL rule."""\n        def decorator(f):\n            endpoint = options.pop("endpoint", None)\n            self.add_url_rule(rule, endpoint, f, **options)\n            return f\n        return decorator\n\n    def add_url_rule(\n        self,\n        rule: str,\n        endpoint: str | None = None,\n        view_func=None,\n        **options,\n    ) -> None:\n        """Register a URL rule. Routes are stored in the URL map\n        and dispatched at request time by the request context.\n        """\n        if endpoint is None:\n            endpoint = view_func.__name__\n        options["endpoint"] = endpoint\n        methods = options.pop("methods", None) or getattr(view_func, "methods", None) or ("GET",)\n        methods = {m.upper() for m in methods}\n        rule_obj = self.url_rule_class(rule, methods=methods, **options)\n        self.url_map.add(rule_obj)\n        if view_func is not None:\n            self.view_functions[endpoint] = view_func` },
 
   "src/flask/__init__.py": { language: "python", content: `from __future__ import annotations\n\nfrom .app import Flask as Flask\nfrom .blueprints import Blueprint as Blueprint\nfrom .config import Config as Config\nfrom .ctx import after_this_request as after_this_request\nfrom .ctx import has_app_context as has_app_context\nfrom .ctx import has_request_context as has_request_context\nfrom .globals import current_app as current_app\nfrom .globals import g as g\nfrom .globals import request as request\nfrom .globals import session as session\nfrom .helpers import abort as abort\nfrom .helpers import flash as flash\nfrom .helpers import get_flashed_messages as get_flashed_messages\nfrom .helpers import make_response as make_response\nfrom .helpers import redirect as redirect\nfrom .helpers import send_file as send_file\nfrom .helpers import url_for as url_for\nfrom .json import jsonify as jsonify\nfrom .templating import render_template as render_template\nfrom .templating import render_template_string as render_template_string\nfrom .wrappers import Request as Request\nfrom .wrappers import Response as Response` },
 
-  "src/flask/routing.py": { language: "python", content: `from __future__ import annotations\nimport typing as t\nfrom werkzeug.routing import Map, MapAdapter\nfrom werkzeug.routing import Rule as WerkzeugRule\n\n\nclass Rule(WerkzeugRule):\n    """Flask's URL rule subclass. Extends Werkzeug's Rule with\n    Flask-specific behaviour for endpoint registration.\n    """\n    def __init__(self, string: str, **kwargs: t.Any) -> None:\n        super().__init__(string, **kwargs)\n\n\nclass Map(Map):\n    """Flask's URL map. Manages all registered URL rules and\n    provides binding to a WSGI environ for dispatching.\n    """\n\n    def bind_to_environ(\n        self,\n        environ: t.Any,\n        server_name: str | None = None,\n        subdomain: str | None = None,\n    ) -> MapAdapter:\n        """Create a MapAdapter bound to the current WSGI environ.\n        Used by the request context to dispatch incoming requests.\n        """\n        return super().bind_to_environ(\n            environ, server_name=server_name, subdomain=subdomain\n        )\n\n    def update(self) -> None:\n        """Re-sort rules after any changes. Called automatically\n        before matching and URL building.\n        """\n        if not self._remap:\n            return\n        with self._remap_lock:\n            if not self._remap:\n                return\n            self._rules.sort(key=lambda x: x.match_compare_key())\n            self._remap = False` },
+  "src/flask/routing.py": { language: "python", content: `from __future__ import annotations\nimport typing as t\nfrom werkzeug.routing import Map, MapAdapter\nfrom werkzeug.routing import Rule as WerkzeugRule\n\n\nclass Rule(WerkzeugRule):\n    """Flask's URL rule subclass.\n    Extends Werkzeug's Rule with Flask-specific endpoint registration.\n    """\n    def __init__(self, string: str, **kwargs: t.Any) -> None:\n        super().__init__(string, **kwargs)\n\n\nclass Map(Map):\n    """Flask's URL map.\n    Manages all registered rules and binds to a WSGI environ for dispatch.\n    """\n\n    def bind_to_environ(\n        self,\n        environ: t.Any,\n        server_name: str | None = None,\n        subdomain: str | None = None,\n    ) -> MapAdapter:\n        """Create a MapAdapter bound to the current WSGI environ.\n        Called by the request context when dispatching incoming requests.\n        """\n        return super().bind_to_environ(\n            environ, server_name=server_name, subdomain=subdomain\n        )\n\n    def update(self) -> None:\n        """Re-sort rules. Called automatically before matching and URL building."""\n        if not self._remap:\n            return\n        with self._remap_lock:\n            if not self._remap:\n                return\n            self._rules.sort(key=lambda x: x.match_compare_key())\n            self._remap = False` },
 
-  "src/flask/helpers.py": { language: "python", content: `from __future__ import annotations\nimport typing as t\nfrom werkzeug.exceptions import NotFound\nfrom werkzeug.utils import redirect as _redirect\nfrom werkzeug.utils import send_file as _send_file\nfrom .globals import current_app, request, session\nfrom .signals import message_flashed\n\n\ndef url_for(endpoint: str, *, _anchor=None, _method=None, _scheme=None,\n            _external=None, **values) -> str:\n    """Generate a URL for the given endpoint with Werkzeug's\n    URL adapter bound to the active request context.\n    """\n    url_adapter = current_app.create_url_adapter(request)\n    return url_adapter.build(endpoint, values, method=_method, force_external=_external)\n\n\ndef flash(message: str, category: str = \"message\") -> None:\n    """Add a flash message to the session to be displayed\n    on the next request.\n    """\n    flashes = session.get(\"_flashes\", [])\n    flashes.append((category, message))\n    session[\"_flashes\"] = flashes\n    message_flashed.send(\n        current_app._get_current_object(),\n        message=message,\n        category=category,\n    )\n\n\ndef get_flashed_messages(with_categories=False, category_filter=()) -> list:\n    """Retrieve and clear all flash messages from the session.\n    If with_categories is True, returns (category, message) tuples.\n    """\n    flashes = request.__dict__.pop(\"_flashes\", [])\n    if category_filter:\n        flashes = [(c, m) for c, m in flashes if c in category_filter]\n    if not with_categories:\n        return [m for _, m in flashes]\n    return flashes\n\n\ndef make_response(*args) -> t.Any:\n    """Create a Response object from the return value of a view function."""\n    return current_app.make_response(args[0] if len(args) == 1 else args)` }
+  "src/flask/helpers.py": { language: "python", content: `from __future__ import annotations\nimport typing as t\nfrom werkzeug.exceptions import NotFound\nfrom werkzeug.utils import redirect as _redirect\nfrom werkzeug.utils import send_file as _send_file\nfrom .globals import current_app, request, session\nfrom .signals import message_flashed\n\n\ndef url_for(endpoint: str, *, _anchor=None, _method=None,\n            _scheme=None, _external=None, **values) -> str:\n    """Generate a URL for the given endpoint.\n    Uses Werkzeug's URL adapter bound to the active request context.\n    """\n    url_adapter = current_app.create_url_adapter(request)\n    return url_adapter.build(endpoint, values, method=_method, force_external=_external)\n\n\ndef flash(message: str, category: str = "message") -> None:\n    """Add a flash message to the session.\n    Stored under _flashes as a (category, message) tuple.\n    """\n    flashes = session.get("_flashes", [])\n    flashes.append((category, message))\n    session["_flashes"] = flashes\n    message_flashed.send(\n        current_app._get_current_object(),\n        message=message, category=category,\n    )\n\n\ndef get_flashed_messages(with_categories=False, category_filter=()) -> list:\n    """Retrieve and clear all flash messages from the session."""\n    flashes = request.__dict__.pop("_flashes", [])\n    if category_filter:\n        flashes = [(c, m) for c, m in flashes if c in category_filter]\n    return flashes if with_categories else [m for _, m in flashes]` }
 };
 
 const ARCH_TREE = {
@@ -416,61 +433,88 @@ const ARCH_TREE = {
   ]
 };
 
-const TRACE_DATA = [
-  { path: "src/flask/app.py",        type: "direct" },
-  { path: "src/flask/ctx.py",        type: "direct" },
-  { path: "src/flask/helpers.py",    type: "direct" },
-  { path: "src/flask/templating.py", type: "transitive" },
-  { path: "tests/test_basic.py",     type: "transitive" },
-];
-
+// Mock responses — type: "answer" | "trace"
 const RESPONSES = [
   {
+    type: "answer",
     q: "How does routing work in Flask?",
-    a: `Flask routing is built on Werkzeug's URL routing engine. When you call <code>@app.route('/path')</code>, it invokes <code>add_url_rule</code>, which creates a <code>Rule</code> object and registers it on the app's <code>url_map</code>.\n\nAt request time, <code>wsgi_app</code> pushes a request context and calls <code>full_dispatch_request</code>. The bound <code>MapAdapter</code> matches the incoming URL against all registered rules and dispatches to the correct view function.`,
-    citations: [{ path: "src/flask/app.py", line: 56 }, { path: "src/flask/app.py", line: 64 }, { path: "src/flask/routing.py", line: 22 }]
+    a: `Flask routing is built on Werkzeug's URL engine. <code>@app.route('/path')</code> calls <code>add_url_rule</code>, which creates a <code>Rule</code> and registers it on the app's <code>url_map</code>.\n\nAt request time, <code>wsgi_app</code> pushes a request context and dispatches through the bound <code>MapAdapter</code>.`,
+    citations: [
+      { path: "src/flask/app.py",     line: 56 },
+      { path: "src/flask/app.py",     line: 64 },
+      { path: "src/flask/routing.py", line: 22 },
+    ]
   },
   {
-    q: "What does __init__.py export?",
-    a: `<code>src/flask/__init__.py</code> is the public API surface — it re-exports every symbol you can import directly from <code>flask</code>.\n\nThis includes the <code>Flask</code> app class, <code>Blueprint</code>, request globals (<code>request</code>, <code>g</code>, <code>session</code>), helpers like <code>url_for</code>, <code>redirect</code>, <code>flash</code>, and response utilities like <code>jsonify</code> and <code>make_response</code>.`,
-    citations: [{ path: "src/flask/__init__.py", line: 3 }, { path: "src/flask/__init__.py", line: 11 }]
+    type: "trace",
+    q: "What files depend on __init__.py?",
+    source: "src/flask/__init__.py",
+    a: `I traced the dependencies for <code>src/flask/__init__.py</code>. It's the public API surface, so several modules import from it directly.`,
+    affected: [
+      { path: "src/flask/app.py",        type: "direct" },
+      { path: "src/flask/ctx.py",        type: "direct" },
+      { path: "src/flask/helpers.py",    type: "direct" },
+      { path: "src/flask/templating.py", type: "transitive" },
+      { path: "tests/test_basic.py",     type: "transitive" },
+    ]
   },
   {
+    type: "answer",
     q: "How does flash messaging work?",
-    a: `Flash messages are stored in the session under <code>_flashes</code> as a list of <code>(category, message)</code> tuples. Calling <code>flash()</code> appends to that list and fires the <code>message_flashed</code> signal.\n\nOn the next request, <code>get_flashed_messages()</code> pops the list from the session (clearing it) and returns just the message strings, or tuples if <code>with_categories=True</code>.`,
-    citations: [{ path: "src/flask/helpers.py", line: 18 }, { path: "src/flask/helpers.py", line: 30 }]
+    a: `Flash messages are stored in the session under <code>_flashes</code> as <code>(category, message)</code> tuples. <code>flash()</code> appends and fires the signal; <code>get_flashed_messages()</code> pops and returns them on the next request.`,
+    citations: [
+      { path: "src/flask/helpers.py", line: 18 },
+      { path: "src/flask/helpers.py", line: 30 },
+    ]
   },
 ];
 
-// ── Utilities ──────────────────────────────────────────────────────────────────
+// ── Canvas layer / tab control ────────────────────────────────────────────────
 
-function esc(s) {
-  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+let currentLayer = "arch";   // "arch" | "trace" | "code"
+let prevNonCodeLayer = "arch"; // remembers which tab to return to from code
+
+function activateTab(name) {
+  // Only arch and trace are tabs; code is an overlay
+  document.querySelectorAll(".ctx-tab").forEach(t => t.classList.remove("active"));
+  const tab = document.getElementById(`tab-${name}`);
+  if (tab) tab.classList.add("active");
+
+  document.querySelectorAll(".canvas-layer").forEach(l => l.classList.remove("active"));
+  document.getElementById(`layer-${name}`).classList.add("active");
+  currentLayer = name;
+
+  // Arch toolbar only when on arch
+  document.getElementById("arch-toolbar").style.display = name === "arch" ? "flex" : "none";
+  // Code overlay controls hidden
+  document.getElementById("ctx-back").classList.remove("visible");
+  document.getElementById("ctx-code-label").classList.remove("visible");
 }
 
-// ── Tab control ────────────────────────────────────────────────────────────────
+function showCodeOverlay(filePath, label) {
+  prevNonCodeLayer = currentLayer === "code" ? prevNonCodeLayer : currentLayer;
+  document.querySelectorAll(".ctx-tab").forEach(t => t.classList.remove("active"));
+  document.querySelectorAll(".canvas-layer").forEach(l => l.classList.remove("active"));
+  document.getElementById("layer-code").classList.add("active");
+  currentLayer = "code";
 
-let activeTab = "code";
-
-function switchTab(name) {
-  document.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
-  document.querySelectorAll(".canvas-panel").forEach(p => p.classList.remove("active"));
-  document.getElementById(`panel-${name}`).classList.add("active");
-  activeTab = name;
-  if (name === "arch") initArch();
+  document.getElementById("arch-toolbar").style.display = "none";
+  document.getElementById("ctx-back").classList.add("visible");
+  const lbl = document.getElementById("ctx-code-label");
+  lbl.innerHTML = label;
+  lbl.classList.add("visible");
 }
 
-document.querySelectorAll(".tab-btn").forEach(b => b.addEventListener("click", () => switchTab(b.dataset.tab)));
+document.getElementById("ctx-back").addEventListener("click", () => {
+  activateTab(prevNonCodeLayer);
+});
+
+document.getElementById("tab-arch").addEventListener("click", () => activateTab("arch"));
 
 // ── Code viewer ────────────────────────────────────────────────────────────────
 
 function openCodeViewer(filePath, targetLine) {
-  switchTab("code");
   const file = FILES[filePath];
-
-  document.getElementById("welcome-state").style.display = file ? "none" : "";
-  const content = document.getElementById("code-content");
-  content.style.display = file ? "flex" : "none";
   if (!file) return;
 
   const parts = filePath.split("/");
@@ -482,7 +526,6 @@ function openCodeViewer(filePath, targetLine) {
 
   const linesEl = document.getElementById("code-lines");
   linesEl.innerHTML = "";
-
   const grammar = Prism.languages[file.language] || Prism.languages.clike;
   file.content.split("\n").forEach((raw, i) => {
     const n = i + 1;
@@ -496,6 +539,10 @@ function openCodeViewer(filePath, targetLine) {
     linesEl.appendChild(row);
   });
 
+  const pathLabel = `<span class="dim">${parts.join("/")}/</span><span class="hl">${esc(fname)}</span>` +
+    (targetLine ? `<span class="dim">:${targetLine}</span>` : "");
+  showCodeOverlay(filePath, pathLabel);
+
   if (targetLine) {
     requestAnimationFrame(() => {
       const scroll = document.getElementById("code-scroll");
@@ -505,6 +552,49 @@ function openCodeViewer(filePath, targetLine) {
   }
 }
 
+// ── Trace view ─────────────────────────────────────────────────────────────────
+
+function openTrace(source, affected) {
+  document.getElementById("trace-source-label").textContent = source;
+  document.getElementById("trace-count-label").textContent =
+    `${affected.length} file(s) import this module directly or transitively`;
+
+  const list = document.getElementById("trace-list");
+  list.innerHTML = "";
+  affected.forEach(item => {
+    const el = document.createElement("div");
+    el.className = "trace-item";
+    el.innerHTML = `<span class="trace-dot ${item.type}"></span>
+      <span class="trace-path">${esc(item.path)}</span>
+      <span class="trace-badge ${item.type}">${item.type}</span>`;
+    el.addEventListener("click", () => openCodeViewer(item.path, 1));
+    list.appendChild(el);
+  });
+
+  // Inject trace tab if not already present
+  if (!document.getElementById("tab-trace")) {
+    const tab = document.createElement("button");
+    tab.className = "ctx-tab";
+    tab.id = "tab-trace";
+    const srcName = source.split("/").pop();
+    tab.innerHTML = `⇢ ${esc(srcName)} <span class="tab-close" title="Close">×</span>`;
+    tab.addEventListener("click", e => {
+      if (e.target.classList.contains("tab-close")) {
+        tab.remove();
+        if (currentLayer === "trace") activateTab("arch");
+      } else {
+        activateTab("trace");
+      }
+    });
+    document.getElementById("tab-arch").insertAdjacentElement("afterend", tab);
+  } else {
+    const srcName = source.split("/").pop();
+    document.getElementById("tab-trace").innerHTML =
+      `⇢ ${esc(srcName)} <span class="tab-close" title="Close">×</span>`;
+  }
+  activateTab("trace");
+}
+
 // ── Chat ───────────────────────────────────────────────────────────────────────
 
 const messagesEl = document.getElementById("messages");
@@ -512,7 +602,11 @@ const inputEl    = document.getElementById("chat-input");
 const sendBtn    = document.getElementById("send-btn");
 let responseIdx  = 0;
 
-function appendMsg(role, html, citations) {
+function esc(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+function appendMsg(role, html, response) {
   const wrap = document.createElement("div");
   wrap.className = `msg msg-${role}`;
 
@@ -525,17 +619,26 @@ function appendMsg(role, html, citations) {
   bubble.className = "bubble";
   bubble.innerHTML = html;
 
-  if (citations && citations.length) {
-    const chips = document.createElement("div");
-    chips.className = "citations";
-    citations.forEach(c => {
+  if (response) {
+    if (response.type === "answer" && response.citations?.length) {
+      const chips = document.createElement("div");
+      chips.className = "citations";
+      response.citations.forEach(c => {
+        const chip = document.createElement("span");
+        chip.className = "cite-chip";
+        chip.textContent = `${c.path}:${c.line}`;
+        chip.addEventListener("click", () => openCodeViewer(c.path, c.line));
+        chips.appendChild(chip);
+      });
+      bubble.appendChild(chips);
+    }
+    if (response.type === "trace" && response.affected) {
       const chip = document.createElement("span");
-      chip.className = "cite-chip";
-      chip.textContent = `${c.path}:${c.line}`;
-      chip.addEventListener("click", () => openCodeViewer(c.path, c.line));
-      chips.appendChild(chip);
-    });
-    bubble.appendChild(chips);
+      chip.className = "trace-chip";
+      chip.innerHTML = `⇢ View dependency trace for ${esc(response.source.split("/").pop())}`;
+      chip.addEventListener("click", () => openTrace(response.source, response.affected));
+      bubble.appendChild(chip);
+    }
   }
 
   wrap.appendChild(bubble);
@@ -545,13 +648,10 @@ function appendMsg(role, html, citations) {
 
 function showThinking() {
   const wrap = document.createElement("div");
-  wrap.className = "msg msg-assistant";
-  wrap.id = "_thinking";
-  const b = document.createElement("div");
-  b.className = "thinking";
+  wrap.className = "msg msg-assistant"; wrap.id = "_thinking";
+  const b = document.createElement("div"); b.className = "thinking";
   b.innerHTML = "<span></span><span></span><span></span>";
-  wrap.appendChild(b);
-  messagesEl.appendChild(wrap);
+  wrap.appendChild(b); messagesEl.appendChild(wrap);
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 function removeThinking() { document.getElementById("_thinking")?.remove(); }
@@ -559,74 +659,51 @@ function removeThinking() { document.getElementById("_thinking")?.remove(); }
 function sendMessage() {
   const text = inputEl.value.trim();
   if (!text) return;
-  inputEl.value = "";
-  inputEl.style.height = "auto";
+  inputEl.value = ""; inputEl.style.height = "auto";
   sendBtn.disabled = true;
-
   appendMsg("user", esc(text));
   showThinking();
-
   const r = RESPONSES[responseIdx % RESPONSES.length];
   responseIdx++;
   setTimeout(() => {
     removeThinking();
-    appendMsg("assistant", r.a, r.citations);
+    appendMsg("assistant", r.a, r);
     sendBtn.disabled = false;
-  }, 800 + Math.random() * 700);
+  }, 800 + Math.random() * 600);
 }
 
 sendBtn.addEventListener("click", sendMessage);
 inputEl.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
 inputEl.addEventListener("input", () => { inputEl.style.height = "auto"; inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + "px"; });
 
-// Seed initial conversation
-appendMsg("assistant", `I've indexed <strong>83 files</strong> from <code>pallets/flask</code>. Ask me how routing works, what a module exports, or switch to <em>Architecture</em> to explore the file tree.`, []);
+// Seed
+appendMsg("assistant", `I've indexed <strong>83 files</strong> from <code>pallets/flask</code>. Ask how routing works, what a module exports, or what depends on a file — I'll surface the right view automatically.`, null);
 appendMsg("user", esc(RESPONSES[0].q));
 showThinking();
-setTimeout(() => { removeThinking(); appendMsg("assistant", RESPONSES[0].a, RESPONSES[0].citations); responseIdx = 1; }, 1400);
-
-// ── Trace panel ────────────────────────────────────────────────────────────────
-
-TRACE_DATA.forEach(item => {
-  const el = document.createElement("div");
-  el.className = "trace-item";
-  el.innerHTML = `<span class="trace-dot ${item.type}"></span>
-    <span class="trace-path">${esc(item.path)}</span>
-    <span class="trace-badge ${item.type}">${item.type}</span>`;
-  el.addEventListener("click", () => openCodeViewer(item.path, 1));
-  document.getElementById("trace-list").appendChild(el);
-});
+setTimeout(() => { removeThinking(); appendMsg("assistant", RESPONSES[0].a, RESPONSES[0]); responseIdx = 1; }, 1400);
 
 // ── Architecture D3 ────────────────────────────────────────────────────────────
 
-let archInited = false;
-
-function initArch() {
-  if (archInited) return;
-  archInited = true;
-
-  const container = document.getElementById("arch-panel");
-  const W = container.clientWidth, H = container.clientHeight;
+(function initArch() {
+  const container = document.getElementById("layer-arch");
+  const W = container.clientWidth || 800;
+  const H = container.clientHeight || 600;
   const svg = d3.select("#arch-svg");
   const g = svg.append("g");
 
   const zoom = d3.zoom().scaleExtent([0.15, 4]).on("zoom", e => g.attr("transform", e.transform));
   svg.call(zoom);
 
-  const resetView = () => svg.transition().duration(350)
-    .call(zoom.transform, d3.zoomIdentity.translate(W * 0.1, H / 2).scale(0.88));
-
-  document.getElementById("btn-reset").addEventListener("click", resetView);
+  const resetView = () =>
+    svg.transition().duration(350).call(zoom.transform, d3.zoomIdentity.translate(W * 0.1, H / 2).scale(0.88));
 
   const root = d3.hierarchy(ARCH_TREE);
   root.x0 = H / 2; root.y0 = 0;
-
   root.descendants().forEach(d => {
     if (d.depth >= 2 && d.children) { d._children = d.children; d.children = null; }
   });
 
   const tree = d3.tree().nodeSize([20, 190]);
-
   const LANG_COLOR = { python:"#4B8BBE", javascript:"#F7DF1E", typescript:"#3178C6",
     tsx:"#3178C6", go:"#00ADD8", rust:"#CE422B", java:"#ED8B00", cpp:"#659AD2", unknown:"#6B7280" };
 
@@ -636,7 +713,7 @@ function initArch() {
 
     const link = g.selectAll(".al").data(links, d => d.target.data.id);
     link.enter().append("path").attr("class","al")
-      .attr("fill","none").attr("stroke","rgba(255,255,255,0.08)").attr("stroke-width",1)
+      .attr("fill","none").attr("stroke","rgba(255,255,255,0.07)").attr("stroke-width",1)
       .merge(link).transition().duration(220)
       .attr("d", d3.linkHorizontal().x(d => d.y).y(d => d.x));
     link.exit().remove();
@@ -650,19 +727,15 @@ function initArch() {
         else { d.children = d._children; d._children = null; }
         update(d);
       });
+    enter.append("circle").attr("r",5).attr("stroke","rgba(255,255,255,0.1)").attr("stroke-width",1);
+    enter.append("text").attr("dy","0.32em").attr("font-family","var(--font-code)").attr("font-size","11px").attr("fill","var(--text-2)");
 
-    enter.append("circle").attr("r", 5)
-      .attr("stroke","rgba(255,255,255,0.12)").attr("stroke-width",1);
-    enter.append("text").attr("dy","0.32em")
-      .attr("font-family","var(--font-code)").attr("font-size","11px")
-      .attr("fill","var(--text-2)");
-
-    const merged = enter.merge(node);
-    merged.transition().duration(220).attr("transform", d => `translate(${d.y},${d.x})`);
-    merged.select("circle").attr("fill", d =>
+    const m = enter.merge(node);
+    m.transition().duration(220).attr("transform", d => `translate(${d.y},${d.x})`);
+    m.select("circle").attr("fill", d =>
       d.data.type === "folder" ? (d.children ? "#6B7280" : "#374151") : (LANG_COLOR[d.data.language] || LANG_COLOR.unknown)
     );
-    merged.select("text")
+    m.select("text")
       .attr("x", d => (d.children || d._children) ? -9 : 9)
       .attr("text-anchor", d => (d.children || d._children) ? "end" : "start")
       .text(d => d.data.name);
@@ -674,22 +747,22 @@ function initArch() {
   update(root);
   resetView();
 
-  document.getElementById("btn-expand").addEventListener("click", () => {
+  window.archExpandAll = () => {
     root.descendants().forEach(d => { if (d._children) { d.children = d._children; d._children = null; } });
     update(root);
-  });
-  document.getElementById("btn-collapse").addEventListener("click", () => {
+  };
+  window.archCollapseAll = () => {
     root.descendants().forEach(d => { if (d.depth > 0 && d.children) { d._children = d.children; d.children = null; } });
     update(root);
-  });
-}
+  };
+  window.resetArchZoom = resetView;
+})();
 
 // ── Resizable divider ──────────────────────────────────────────────────────────
 
 const divider  = document.getElementById("divider");
 const leftPane = document.getElementById("left-pane");
 let dragging   = false;
-
 divider.addEventListener("mousedown", () => {
   dragging = true; divider.classList.add("dragging");
   document.body.style.cssText += ";cursor:col-resize;user-select:none";
@@ -703,8 +776,10 @@ document.addEventListener("mouseup", () => {
   if (!dragging) return;
   dragging = false; divider.classList.remove("dragging");
   document.body.style.cursor = ""; document.body.style.userSelect = "";
-  if (activeTab === "arch") { archInited = false; document.getElementById("arch-svg").innerHTML = ""; initArch(); }
 });
+
+// Init
+activateTab("arch");
 </script>
 </body>
 </html>
