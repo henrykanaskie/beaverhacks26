@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Nemotron RAG — Workspace</title>
+  <title>AccliMate — Workspace</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
@@ -43,7 +43,21 @@
       border-bottom: 1px solid var(--border);
       display: flex; align-items: center; padding: 0 16px; gap: 10px; flex-shrink: 0;
     }
-    .logo { font-size: 13px; font-weight: 600; color: var(--purple); letter-spacing: .02em; }
+    .logo {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 13px; font-weight: 600; color: var(--purple); letter-spacing: .02em;
+    }
+    .logo-img { mix-blend-mode: normal; }
+    .logo-link {
+      text-decoration: none;
+      color: inherit;
+      border-radius: 4px;
+    }
+    .logo-link:hover { opacity: 0.92; }
+    .logo-link:focus-visible {
+      outline: 2px solid var(--blue);
+      outline-offset: 2px;
+    }
     .repo { font-family: var(--font-code); font-size: 12px; color: var(--text-2); }
     .sep  { color: var(--text-3); }
     .demo-pill {
@@ -69,13 +83,7 @@
     }
     #chat-header {
       padding: 10px 16px; border-bottom: 1px solid var(--border);
-      display: flex; align-items: center; gap: 8px; flex-shrink: 0; flex-wrap: wrap;
-    }
-    .chat-toggles {
-      display: inline-flex; flex-wrap: wrap; align-items: center; gap: 10px;
-    }
-    .mode-toggle input[type="checkbox"]:disabled {
-      opacity: 0.5; cursor: not-allowed;
+      display: flex; align-items: center; gap: 8px; flex-shrink: 0;
     }
     #chat-header h2 {
       font-size: 11px; font-weight: 600; text-transform: uppercase;
@@ -88,31 +96,6 @@
       border: 1px solid rgba(122,162,247,.2); cursor: pointer;
     }
     .scope-pill:hover { background: rgba(122,162,247,.18); }
-
-    .stream-status {
-      display: inline-flex; align-items: center; gap: 8px;
-      font-style: italic; color: var(--text-3); font-size: 13px;
-      transition: opacity .2s;
-    }
-    .stream-status::before {
-      content: ""; width: 6px; height: 6px; border-radius: 50%;
-      background: var(--blue); animation: pulse 1.2s ease-in-out infinite;
-    }
-    @keyframes pulse { 0%,100% { opacity:.3; } 50% { opacity:1; } }
-
-    /* Typing cursor for streaming text */
-    .streaming-cursor::after {
-      content: "▊"; color: var(--blue); animation: cursor-blink .6s steps(2) infinite;
-      margin-left: 1px;
-    }
-    @keyframes cursor-blink { 0% { opacity:1; } 50% { opacity:0; } }
-    .mode-badge {
-      display: inline-block; font-family: var(--font-code); font-size: 10px;
-      padding: 1px 6px; border-radius: 3px; margin-top: 6px;
-      background: rgba(187,154,247,.1); color: var(--purple);
-      border: 1px solid rgba(187,154,247,.2);
-    }
-    .mode-badge.deep { background: rgba(125,207,255,.08); color: var(--cyan); border-color: rgba(125,207,255,.2); }
 
     #messages {
       flex: 1; overflow-y: auto; padding: 16px;
@@ -207,6 +190,7 @@
     #ctx-bar {
       height: 36px; background: var(--bg-deep); border-bottom: 1px solid var(--border);
       display: flex; align-items: stretch; padding: 0 4px; gap: 2px; flex-shrink: 0;
+      overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; scrollbar-color: var(--bg-hover) transparent;
     }
     .ctx-tab {
       display: flex; align-items: center; gap: 6px;
@@ -222,23 +206,6 @@
       padding: 0 0 0 2px; transition: color .12s;
     }
     .ctx-tab .tab-close:hover { color: var(--red); }
-    /* code overlay back button */
-    #ctx-back {
-      display: none; align-items: center; gap: 5px;
-      padding: 0 12px; border: none; background: none; cursor: pointer;
-      font-family: var(--font-ui); font-size: 12px; color: var(--text-2);
-      border-right: 1px solid var(--border); flex-shrink: 0;
-      transition: color .12s, background .12s;
-    }
-    #ctx-back:hover { color: var(--text-1); background: var(--bg-hover); }
-    #ctx-back.visible { display: flex; }
-    #ctx-code-label {
-      font-family: var(--font-code); font-size: 11.5px; color: var(--text-2);
-      padding: 0 8px; display: none; align-items: center;
-    }
-    #ctx-code-label.visible { display: flex; }
-    #ctx-code-label .hl  { color: var(--cyan); }
-    #ctx-code-label .dim { color: var(--text-3); }
 
     /* Canvas layers — all stacked, only one visible */
     .canvas-layer {
@@ -257,41 +224,22 @@
     #arch-toolbar {
       position: absolute; top: 10px; right: 12px;
       display: flex; gap: 6px; z-index: 5;
-      align-items: center; flex-wrap: wrap;
-      background: rgba(22,22,30,.75); padding: 6px 10px;
-      border: 1px solid var(--border); border-radius: 6px;
-      backdrop-filter: blur(6px);
     }
-    #arch-counts {
-      font-family: var(--font-code); font-size: 11px; color: var(--text-2);
-      padding-right: 4px;
-    }
-    #arch-search {
-      width: 200px; font-family: var(--font-ui); font-size: 12px;
-      background: var(--bg-active); border: 1px solid var(--border-md);
-      border-radius: 4px; color: var(--text-1); padding: 4px 8px; outline: none;
-      transition: border-color .15s;
-    }
-    #arch-search:focus { border-color: rgba(122,162,247,.5); }
-    #arch-search::placeholder { color: var(--text-3); }
     .arch-btn {
       background: var(--bg-raised); border: 1px solid var(--border-md);
       color: var(--text-2); font-size: 11px; font-family: var(--font-ui);
       padding: 4px 10px; border-radius: 4px; cursor: pointer; transition: background .12s;
     }
     .arch-btn:hover { background: var(--bg-hover); color: var(--text-1); }
-    #arch-svg { width: 100%; height: 100%; display: block; cursor: grab; }
-    #arch-svg:active { cursor: grabbing; }
-
-    .arch-link { fill: none; stroke: rgba(255,255,255,0.08); stroke-width: 1; }
-    .arch-node text {
-      font-size: 11px; font-family: var(--font-code);
-      user-select: none; pointer-events: none;
+    .arch-input {
+      background: var(--bg-raised); border: 1px solid var(--border-md);
+      color: var(--text-1); font-size: 11px; font-family: var(--font-ui);
+      padding: 4px 8px; border-radius: 4px; outline: none; width: 140px;
+      transition: border-color .12s;
     }
-    .arch-node-folder text { fill: var(--text-1); }
-    .arch-node-file   text { fill: var(--text-2); }
-    .arch-node-match  text { fill: var(--red) !important; font-weight: 600; }
-    .arch-node-match circle { stroke: var(--red) !important; stroke-width: 2 !important; }
+    .arch-input:focus { border-color: var(--blue); }
+    .arch-input::placeholder { color: var(--text-3); }
+    #arch-svg { width: 100%; height: 100%; display: block; }
 
     /* ── Code viewer ── */
     #layer-code { background: var(--bg-main); }
@@ -320,6 +268,7 @@
     .line-content {
       flex: 1; padding-right: 32px;
       font-family: var(--font-code); font-size: 12.5px; line-height: 1.72;
+      white-space: pre;
     }
     .line-hl { background: rgba(224,175,104,.1); border-left: 2px solid var(--yellow); }
     .line-hl .line-num { color: var(--yellow); }
@@ -362,81 +311,279 @@
     .trace-badge.direct     { background: rgba(247,118,142,.12); color: var(--red);    border: 1px solid rgba(247,118,142,.22); }
     .trace-badge.transitive { background: rgba(224,175,104,.12); color: var(--yellow); border: 1px solid rgba(224,175,104,.22); }
 
-    /* ── Agent trace panel (inline in chat) ── */
-    .agent-trace {
-      margin-top: 10px; border-radius: 6px;
-      background: rgba(255,255,255,.03); border: 1px solid var(--border);
-      font-size: 12px;
+    /* ── Chat mode toggle ── */
+    #mode-toggle {
+      margin-left: auto; display: inline-flex; gap: 2px;
+      background: var(--bg-active); border: 1px solid var(--border-md);
+      border-radius: 6px; padding: 2px;
     }
-    .agent-trace summary {
-      cursor: pointer; padding: 6px 10px; color: var(--text-2);
-      font-family: var(--font-code); font-size: 11px;
-      user-select: none; list-style: none;
+    .mode-btn {
+      font-family: var(--font-ui); font-size: 11px; font-weight: 500;
+      color: var(--text-2); background: none; border: none; border-radius: 4px;
+      padding: 4px 10px; cursor: pointer; transition: background .12s, color .12s;
     }
-    .agent-trace summary::-webkit-details-marker { display: none; }
-    .agent-trace summary::before {
-      content: "▶ "; font-size: 9px; margin-right: 4px;
-      display: inline-block; transition: transform .15s;
-    }
-    .agent-trace[open] summary::before { transform: rotate(90deg); }
-    .agent-trace-steps { padding: 6px 10px 10px; display: flex; flex-direction: column; gap: 6px; }
-    .trace-step {
-      background: rgba(255,255,255,.03); border: 1px solid var(--border);
-      border-radius: 4px; overflow: hidden;
-    }
-    .trace-step-tool {
-      font-family: var(--font-code); font-size: 11px; color: var(--purple);
-      padding: 5px 8px; background: rgba(187,154,247,.06);
-      border-bottom: 1px solid var(--border);
-    }
-    .trace-step-result {
-      font-family: var(--font-code); font-size: 11px; color: var(--text-2);
-      padding: 5px 8px; max-height: 120px; overflow-y: auto;
-      white-space: pre-wrap; word-break: break-all;
-      scrollbar-width: thin; scrollbar-color: var(--bg-hover) transparent;
+    .mode-btn:hover { color: var(--text-1); }
+    .mode-btn.active {
+      background: rgba(122,162,247,.15); color: var(--blue);
     }
 
-    /* ── Live agent steps (shown inline during streaming) ── */
-    .agent-live-steps { display: flex; flex-direction: column; gap: 4px; }
-    .agent-live-step {
-      display: flex; align-items: center; gap: 8px;
-      font-family: var(--font-code); font-size: 11px; color: var(--text-2);
-      padding: 4px 0;
+    /* ── Narrative player (inside assistant bubble) ── */
+    .narrative-player { display: flex; flex-direction: column; gap: 10px; }
+    .narrative-step {
+      font-size: 13.5px; line-height: 1.7;
     }
-    .agent-live-step .step-icon {
-      width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0;
-      display: flex; align-items: center; justify-content: center; font-size: 10px;
+    .narrative-controls {
+      display: flex; align-items: center; gap: 10px;
+      padding-top: 8px; border-top: 1px solid var(--border);
     }
-    .agent-live-step .step-icon.pending {
-      border: 2px solid var(--blue); border-top-color: transparent;
-      animation: spin .8s linear infinite;
+    .narrative-nav-btn {
+      font-family: var(--font-ui); font-size: 11px; font-weight: 500;
+      background: var(--bg-raised); color: var(--text-1);
+      border: 1px solid var(--border-md); border-radius: 4px;
+      padding: 4px 12px; cursor: pointer; transition: background .12s;
     }
-    .agent-live-step .step-icon.done { background: rgba(158,206,106,.15); color: var(--green); border: none; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .agent-live-step .step-label { color: var(--text-2); }
-    .agent-live-step .step-label .tool-name { color: var(--purple); }
+    .narrative-nav-btn:hover:not(:disabled) { background: var(--bg-hover); }
+    .narrative-nav-btn:disabled { opacity: .35; cursor: default; }
+    .narrative-replay-btn,
+    .narrative-stop-btn {
+      display: inline-flex; align-items: center; gap: 5px;
+    }
+    .narrative-replay-btn {
+      color: var(--cyan);
+      border-color: rgba(125, 207, 255, 0.35);
+      background: rgba(125, 207, 255, 0.06);
+    }
+    .narrative-replay-btn:hover:not(:disabled) {
+      background: rgba(125, 207, 255, 0.14);
+      border-color: rgba(125, 207, 255, 0.55);
+    }
+    .narrative-stop-btn {
+      color: var(--red);
+      border-color: rgba(247, 118, 142, 0.35);
+      background: rgba(247, 118, 142, 0.06);
+    }
+    .narrative-stop-btn:hover:not(:disabled) {
+      background: rgba(247, 118, 142, 0.14);
+      border-color: rgba(247, 118, 142, 0.55);
+    }
+    .narrative-step-counter {
+      margin-left: auto; font-family: var(--font-code); font-size: 11px;
+      color: var(--text-2);
+    }
 
-    /* ── Mode toggle ── */
-    .mode-toggle {
+    /* ── Narrative zoom (per-component deep dive) ── */
+    .narrative-zoom-row {
+      display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+      padding-top: 2px;
+    }
+    .narrative-zoom-btn {
+      font-family: var(--font-ui); font-size: 11.5px; font-weight: 500;
+      background: rgba(125, 207, 255, 0.08); color: var(--cyan);
+      border: 1px solid rgba(125, 207, 255, 0.35); border-radius: 4px;
+      padding: 5px 12px; cursor: pointer;
       display: inline-flex; align-items: center; gap: 6px;
+      transition: background .12s, border-color .12s, transform .08s;
+    }
+    .narrative-zoom-btn:hover:not(:disabled) {
+      background: rgba(125, 207, 255, 0.15); border-color: rgba(125, 207, 255, 0.6);
+    }
+    .narrative-zoom-btn:active:not(:disabled) { transform: translateY(1px); }
+    .narrative-zoom-btn:disabled { opacity: .45; cursor: default; }
+    .narrative-zoom-btn.is-zoomed {
+      opacity: 1;
+      color: var(--green);
+      background: rgba(158, 206, 106, 0.08);
+      border-color: rgba(158, 206, 106, 0.45);
+      cursor: not-allowed;
+    }
+    .narrative-zoom-btn .zoom-glyph { font-size: 12px; }
+
+    .zoom-panel {
+      margin-top: 10px;
+      background: rgba(125, 207, 255, 0.04);
+      border: 1px solid rgba(125, 207, 255, 0.25);
+      border-radius: 6px;
+      padding: 12px 14px 14px;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .zoom-panel-header {
+      display: flex; align-items: center; gap: 10px;
+      padding-bottom: 8px; border-bottom: 1px solid rgba(125, 207, 255, 0.18);
+    }
+    .zoom-panel-title {
+      font-family: var(--font-ui); font-size: 13px; font-weight: 600;
+      color: var(--text-1); letter-spacing: .02em;
+    }
+    .zoom-panel-kind {
+      font-family: var(--font-code); font-size: 10px;
+      color: var(--cyan); background: rgba(125, 207, 255, 0.12);
+      border: 1px solid rgba(125, 207, 255, 0.3);
+      padding: 2px 6px; border-radius: 3px;
+      text-transform: uppercase; letter-spacing: .06em;
+    }
+    .zoom-panel-close {
+      margin-left: auto;
+      font-family: var(--font-ui); font-size: 11px; font-weight: 500;
+      background: var(--bg-raised); color: var(--text-1);
+      border: 1px solid var(--border-md); border-radius: 4px;
+      padding: 4px 10px; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 5px;
+    }
+    .zoom-panel-close:hover { background: var(--bg-hover); }
+
+    .zoom-panel-body {
+      font-size: 13px; line-height: 1.65; color: var(--text-1);
+    }
+    .zoom-panel-body code {
+      font-family: var(--font-code); font-size: 12px;
+      background: rgba(255,255,255,0.06);
+      padding: 1px 5px; border-radius: 3px;
+    }
+    .zoom-panel-body pre {
+      background: rgba(0,0,0,.3); border: 1px solid var(--border);
+      padding: 8px 10px; border-radius: 4px; overflow-x: auto;
+      font-family: var(--font-code); font-size: 12px;
+    }
+
+    .zoom-section-title {
+      font-family: var(--font-ui); font-size: 10.5px; font-weight: 600;
+      color: var(--text-3); text-transform: uppercase; letter-spacing: .08em;
+      margin-bottom: 2px;
+    }
+    .zoom-chip-row {
+      display: flex; flex-wrap: wrap; gap: 6px;
+    }
+    .zoom-chip {
       font-family: var(--font-code); font-size: 11px;
-      color: var(--text-2); cursor: pointer; user-select: none;
+      background: rgba(255,255,255,0.04);
+      color: var(--text-1);
+      border: 1px solid var(--border-md);
+      border-radius: 3px; padding: 3px 8px;
+      display: inline-flex; align-items: center; gap: 6px;
     }
-    .mode-toggle input[type="checkbox"] {
-      appearance: none; -webkit-appearance: none; width: 28px; height: 16px;
-      border-radius: 8px; background: var(--bg-active); border: 1px solid var(--border-md);
-      position: relative; cursor: pointer; transition: background .15s;
+    .zoom-chip.clickable { cursor: pointer; transition: background .1s, border-color .1s; }
+    .zoom-chip.clickable:hover { background: rgba(125, 207, 255, 0.1); border-color: rgba(125, 207, 255, 0.45); }
+    .zoom-chip.tool {
+      color: var(--yellow); border-color: rgba(224, 175, 104, 0.3);
+      background: rgba(224, 175, 104, 0.06);
     }
-    .mode-toggle input[type="checkbox"]::after {
-      content: ""; position: absolute; top: 2px; left: 2px;
-      width: 10px; height: 10px; border-radius: 50%;
-      background: var(--text-3); transition: transform .15s, background .15s;
+    .zoom-chip-role {
+      color: var(--text-3); font-size: 10.5px;
+      font-family: var(--font-ui);
     }
-    .mode-toggle input[type="checkbox"]:checked {
-      background: rgba(187,154,247,.2); border-color: rgba(187,154,247,.4);
+
+    .zoom-loading {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12.5px; color: var(--text-2);
     }
-    .mode-toggle input[type="checkbox"]:checked::after {
-      transform: translateX(12px); background: var(--purple);
+    .zoom-loading::before {
+      content: ""; width: 12px; height: 12px; border-radius: 50%;
+      border: 2px solid rgba(125, 207, 255, 0.25);
+      border-top-color: var(--cyan);
+      animation: zoom-spin 0.9s linear infinite;
+    }
+    @keyframes zoom-spin { to { transform: rotate(360deg); } }
+
+    .zoom-error {
+      color: var(--red); font-size: 12.5px;
+    }
+
+    /* ── System tab ── */
+    #layer-system { background: var(--bg-main); }
+    #system-toolbar {
+      position: absolute; top: 10px; right: 12px;
+      display: flex; gap: 6px; z-index: 5; align-items: center;
+      background: rgba(22,22,30,.75); padding: 6px 10px;
+      border: 1px solid var(--border); border-radius: 6px;
+      backdrop-filter: blur(6px);
+    }
+    #system-status {
+      font-family: var(--font-code); font-size: 11px; color: var(--text-2);
+      padding-right: 4px;
+    }
+    #system-svg { width: 100%; height: 100%; display: block; cursor: grab; }
+    #system-svg:active { cursor: grabbing; }
+
+    .system-node rect {
+      transition: stroke .2s, filter .2s;
+    }
+    .system-node text {
+      font-family: var(--font-code); font-size: 12px;
+      user-select: none; pointer-events: none;
+    }
+    .system-node-kind {
+      font-size: 9px !important; fill: var(--text-3);
+      text-transform: uppercase; letter-spacing: .06em;
+    }
+    .system-node.active rect {
+      stroke: var(--yellow) !important; stroke-width: 2.5 !important;
+      filter: drop-shadow(0 0 8px rgba(224,175,104,.55));
+    }
+
+    .system-edge {
+      fill: none; stroke: rgba(255,255,255,0.12); stroke-width: 1.5;
+      marker-end: url(#system-arrow);
+      transition: stroke .15s;
+    }
+    /* Invisible but wide hit area so hovering near an edge reveals its label */
+    .system-edge-hit {
+      fill: none; stroke: transparent; stroke-width: 18;
+      pointer-events: stroke; cursor: help;
+    }
+    .system-edge-label {
+      font-family: var(--font-code); font-size: 10px;
+      fill: var(--text-3); pointer-events: none;
+      opacity: 0; transition: opacity .15s, fill .15s;
+    }
+    /* Reveal the label when the user hovers the edge group, or when it's
+       activated by narrative mode. */
+    .system-edge-group:hover .system-edge-label,
+    .system-edge-label.active {
+      opacity: 1;
+    }
+    .system-edge-group:hover .system-edge:not(.active) {
+      stroke: rgba(255,255,255,0.28);
+    }
+    .system-edge.active {
+      stroke: var(--cyan); stroke-width: 2.5;
+    }
+    .system-edge-label.active {
+      fill: var(--cyan); font-weight: 600;
+    }
+    .system-particle {
+      fill: var(--cyan);
+      filter: drop-shadow(0 0 4px rgba(125,207,255,.8));
+    }
+    .system-particle-label {
+      font-family: var(--font-code); font-size: 10px;
+      fill: var(--cyan); font-weight: 600;
+      pointer-events: none;
+    }
+
+    #system-overlay {
+      position: absolute; inset: 36px 0 0 0;
+      display: none; align-items: center; justify-content: center;
+      flex-direction: column; gap: 12px;
+      background: rgba(22,22,30,.85); z-index: 4;
+      font-size: 13px; color: var(--text-2);
+    }
+    #system-overlay.visible { display: flex; }
+    #system-overlay .spin {
+      width: 24px; height: 24px;
+      border: 2px solid var(--border-md);
+      border-top-color: var(--blue);
+      border-radius: 50%;
+      animation: sys-spin 0.9s linear infinite;
+    }
+    @keyframes sys-spin { to { transform: rotate(360deg); } }
+    #system-overlay.error .spin { display: none; }
+    #system-overlay.error { color: var(--red); text-align: center; padding: 20px; }
+    #system-overlay pre {
+      max-width: 80%; max-height: 180px; overflow: auto;
+      background: rgba(0,0,0,.25); color: var(--text-2);
+      font-family: var(--font-code); font-size: 11px;
+      padding: 10px; border-radius: 4px; text-align: left;
+      white-space: pre-wrap; word-break: break-word;
     }
 
     ::-webkit-scrollbar { width: 5px; height: 5px; }
@@ -447,7 +594,10 @@
 <body>
 
 <div id="topbar">
-  <span class="logo">⬡ Nemotron RAG</span>
+  <a href="index.html" class="logo logo-link" aria-label="Home — AccliMate">
+    <img src="/logo.png" alt="" class="logo-img" style="height:40px;vertical-align:middle;margin-right:6px">
+    AccliMate
+  </a>
   <span class="sep">/</span>
   <span class="repo" id="topbar-repo">loading…</span>
   <span class="indexed-badge" id="topbar-indexed"></span>
@@ -459,13 +609,10 @@
   <div id="left-pane">
     <div id="chat-header">
       <h2>Assistant</h2>
-      <div class="chat-toggles">
-        <label class="mode-toggle" title="Agent mode: iteratively explores the codebase using tools">
-          <input type="checkbox" id="agent-mode-toggle" checked>
-          <span>Agent</span>
-        </label>
+      <div id="mode-toggle" role="tablist" aria-label="Chat mode">
+        <button class="mode-btn active" data-mode="qa">Q&amp;A</button>
+        <button class="mode-btn" data-mode="narrative">Narrative</button>
       </div>
-      <span class="scope-pill">⊙ Whole codebase</span>
     </div>
     <div id="messages"></div>
     <div id="input-area">
@@ -486,19 +633,15 @@
     <div id="ctx-bar">
       <!-- persistent tabs -->
       <button class="ctx-tab active" id="tab-arch">⬡ Architecture</button>
+      <button class="ctx-tab" id="tab-system">◎ System</button>
       <!-- trace tab injected by JS when a trace result arrives -->
-      <!-- code overlay controls (shown only when code layer is active) -->
-      <button id="ctx-back">← back</button>
-      <span id="ctx-code-label"></span>
       <!-- arch toolbar, right-aligned, hidden when not on arch -->
     </div>
 
     <!-- Layer: architecture (default) -->
     <div class="canvas-layer active" id="layer-arch">
       <div id="arch-toolbar">
-        <span id="arch-counts"></span>
-        <input type="text" id="arch-search" placeholder="Search files and folders…"
-               oninput="archSearch(this.value)">
+        <input type="text" id="arch-search" placeholder="Search files..." class="arch-input" oninput="if(window.archSearch) window.archSearch(this.value)">
         <button class="arch-btn" onclick="archExpandAll()">Expand all</button>
         <button class="arch-btn" onclick="archCollapseAll()">Collapse all</button>
         <button class="arch-btn" onclick="resetArchZoom()">Reset zoom</button>
@@ -506,14 +649,31 @@
       <svg id="arch-svg"></svg>
     </div>
 
-    <!-- Layer: code viewer -->
-    <div class="canvas-layer" id="layer-code">
-      <div id="code-header">
-        <span id="code-file-path"></span>
-        <span id="code-lang-badge"></span>
+    <!-- Layer: system architecture (logical components) -->
+    <div class="canvas-layer" id="layer-system">
+      <div id="system-toolbar">
+        <span id="system-status"></span>
+        <button class="arch-btn" id="system-regen-btn">Regenerate</button>
       </div>
-      <div id="code-scroll"><div id="code-lines"></div></div>
+      <svg id="system-svg">
+        <defs>
+          <marker id="system-arrow" viewBox="0 -5 10 10" refX="8" refY="0"
+                  markerWidth="8" markerHeight="8" orient="auto">
+            <path d="M0,-4L8,0L0,4" fill="rgba(255,255,255,0.3)"></path>
+          </marker>
+          <marker id="system-arrow-active" viewBox="0 -5 10 10" refX="8" refY="0"
+                  markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+            <path d="M0,-4L8,0L0,4" fill="#7dcfff"></path>
+          </marker>
+        </defs>
+      </svg>
+      <div id="system-overlay">
+        <div class="spin"></div>
+        <div id="system-overlay-text">Analyzing system architecture…</div>
+      </div>
     </div>
+
+    <!-- Code viewer layers are injected dynamically by openCodeViewer (layer-code-*) -->
 
     <!-- Layer: trace -->
     <div class="canvas-layer" id="layer-trace">
@@ -529,8 +689,9 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script>
 // ── API / repo config ─────────────────────────────────────────────────────────
 const API = "http://localhost:8000";
@@ -543,11 +704,6 @@ const REPO_LABEL = REPO_URL
 if (!REPO_ID) { window.location.href = "index.html"; }
 
 let currentScope = null;
-let useAgentMode = true;
-
-document.getElementById("agent-mode-toggle").addEventListener("change", e => {
-  useAgentMode = e.target.checked;
-});
 
 // ── Mock data ──────────────────────────────────────────────────────────────────
 
@@ -596,11 +752,9 @@ const ARCH_TREE = {
 
 // ── Canvas layer / tab control ────────────────────────────────────────────────
 
-let currentLayer = "arch";   // "arch" | "trace" | "code"
-let prevNonCodeLayer = "arch"; // remembers which tab to return to from code
+let currentLayer = "arch"; // "arch" | "system" | "trace" | dynamic code-* layer ids
 
 function activateTab(name) {
-  // Only arch and trace are tabs; code is an overlay
   document.querySelectorAll(".ctx-tab").forEach(t => t.classList.remove("active"));
   const tab = document.getElementById(`tab-${name}`);
   if (tab) tab.classList.add("active");
@@ -609,36 +763,57 @@ function activateTab(name) {
   document.getElementById(`layer-${name}`).classList.add("active");
   currentLayer = name;
 
-  // Arch toolbar only when on arch
   document.getElementById("arch-toolbar").style.display = name === "arch" ? "flex" : "none";
-  // Code overlay controls hidden
-  document.getElementById("ctx-back").classList.remove("visible");
-  document.getElementById("ctx-code-label").classList.remove("visible");
+  const sysTb = document.getElementById("system-toolbar");
+  if (sysTb) sysTb.style.display = name === "system" ? "flex" : "none";
+
+  if (name === "system" && window.__systemDiagram && REPO_ID) {
+    window.__systemDiagram.load(REPO_ID);
+  }
 }
 
-function showCodeOverlay(filePath, label) {
-  prevNonCodeLayer = currentLayer === "code" ? prevNonCodeLayer : currentLayer;
-  document.querySelectorAll(".ctx-tab").forEach(t => t.classList.remove("active"));
-  document.querySelectorAll(".canvas-layer").forEach(l => l.classList.remove("active"));
-  document.getElementById("layer-code").classList.add("active");
-  currentLayer = "code";
-
-  document.getElementById("arch-toolbar").style.display = "none";
-  document.getElementById("ctx-back").classList.add("visible");
-  const lbl = document.getElementById("ctx-code-label");
-  lbl.innerHTML = label;
-  lbl.classList.add("visible");
+function ensureTab(id, label, icon) {
+  let tab = document.getElementById(`tab-${id}`);
+  if (!tab) {
+    tab = document.createElement("button");
+    tab.className = "ctx-tab";
+    tab.id = `tab-${id}`;
+    tab.innerHTML = `${icon} ${label} <span class="tab-close" title="Close">×</span>`;
+    tab.addEventListener("click", e => {
+      if (e.target.classList.contains("tab-close")) {
+        tab.remove();
+        const layer = document.getElementById(`layer-${id}`);
+        if (layer && id !== "arch" && id !== "trace") layer.remove();
+        for (const [fp, lid] of openFiles) { if (lid === id) { openFiles.delete(fp); break; } }
+        if (currentLayer === id) activateTab("arch");
+      } else {
+        activateTab(id);
+      }
+    });
+    // Insert after last existing tab
+    const tabs = document.querySelectorAll(".ctx-tab");
+    tabs[tabs.length - 1].insertAdjacentElement("afterend", tab);
+  } else {
+    // Update label but keep close button
+    tab.innerHTML = `${icon} ${label} <span class="tab-close" title="Close">×</span>`;
+  }
+  return tab;
 }
-
-document.getElementById("ctx-back").addEventListener("click", () => {
-  activateTab(prevNonCodeLayer);
-});
 
 document.getElementById("tab-arch").addEventListener("click", () => activateTab("arch"));
+document.getElementById("tab-system").addEventListener("click", () => activateTab("system"));
 
 // ── Code viewer ────────────────────────────────────────────────────────────────
 
-async function openCodeViewer(filePath, targetLine) {
+const openFiles = new Map(); // filePath → layerId
+
+function codeLayerId(filePath) {
+  return "code-" + filePath.replace(/[^a-zA-Z0-9]/g, "_");
+}
+
+async function openCodeViewer(filePath, startLine, endLine) {
+  const targetLine = startLine || null;
+  endLine = endLine || startLine;
   let file = FILES[filePath];
   if (!file && REPO_ID) {
     try {
@@ -652,37 +827,66 @@ async function openCodeViewer(filePath, targetLine) {
   }
   if (!file) return;
 
+  const layerId = codeLayerId(filePath);
   const parts = filePath.split("/");
   const fname = parts.pop();
-  document.getElementById("code-file-path").innerHTML =
-    parts.map(p => `<span style="color:var(--text-3)">${esc(p)}/</span>`).join("") +
-    `<span class="fname">${esc(fname)}</span>`;
-  document.getElementById("code-lang-badge").textContent = file.language;
 
-  const linesEl = document.getElementById("code-lines");
-  linesEl.innerHTML = "";
-  const grammar = Prism.languages[file.language] || Prism.languages.clike;
-  file.content.split("\n").forEach((raw, i) => {
-    const n = i + 1;
-    const hl = targetLine && n === targetLine;
-    const row = document.createElement("div");
-    row.className = "code-line" + (hl ? " line-hl" : "");
-    row.dataset.line = n;
-    row.innerHTML =
-      `<span class="line-num">${n}</span>` +
-      `<span class="line-content language-${file.language}">${Prism.highlight(raw, grammar, file.language) || " "}</span>`;
-    linesEl.appendChild(row);
-  });
+  // Create layer + tab if this file isn't open yet
+  if (!openFiles.has(filePath)) {
+    const layer = document.createElement("div");
+    layer.className = "canvas-layer";
+    layer.id = `layer-${layerId}`;
+    layer.innerHTML =
+      `<div id="code-header-${layerId}" style="background:var(--bg-deep);border-bottom:1px solid var(--border);padding:7px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;">` +
+        `<span style="font-family:var(--font-code);font-size:12px;color:var(--text-2);">` +
+          parts.map(p => `<span style="color:var(--text-3)">${esc(p)}/</span>`).join("") +
+          `<span class="fname">${esc(fname)}</span>` +
+        `</span>` +
+        `<span style="margin-left:auto;font-family:var(--font-code);font-size:10px;padding:2px 6px;border-radius:3px;background:rgba(122,162,247,.1);color:var(--blue);border:1px solid rgba(122,162,247,.2);">${file.language}</span>` +
+      `</div>` +
+      `<div id="code-scroll-${layerId}" style="flex:1;overflow:auto;scrollbar-width:thin;scrollbar-color:var(--bg-hover) transparent;">` +
+        `<div id="code-lines-${layerId}" style="padding:12px 0;"></div>` +
+      `</div>`;
+    document.getElementById("right-pane").appendChild(layer);
 
-  const pathLabel = `<span class="dim">${parts.join("/")}/</span><span class="hl">${esc(fname)}</span>` +
-    (targetLine ? `<span class="dim">:${targetLine}</span>` : "");
-  showCodeOverlay(filePath, pathLabel);
+    // Render lines
+    const linesEl = layer.querySelector(`#code-lines-${layerId}`);
+    const grammar = Prism.languages[file.language] || Prism.languages.clike;
+    file.content.split("\n").forEach((raw, i) => {
+      const n = i + 1;
+      const row = document.createElement("div");
+      row.className = "code-line";
+      row.dataset.line = n;
+      row.innerHTML =
+        `<span class="line-num">${n}</span>` +
+        `<span class="line-content language-${file.language}">${Prism.highlight(raw, grammar, file.language) || " "}</span>`;
+      linesEl.appendChild(row);
+    });
+
+    ensureTab(layerId, fname, "◧");
+    openFiles.set(filePath, layerId);
+  }
+
+  // Highlight line range (clear previous highlights first)
+  const linesEl = document.getElementById(`code-lines-${layerId}`);
+  linesEl.querySelectorAll(".line-hl").forEach(el => el.classList.remove("line-hl"));
+  if (targetLine) {
+    const end = endLine || targetLine;
+    for (let ln = targetLine; ln <= end; ln++) {
+      const row = linesEl.querySelector(`[data-line="${ln}"]`);
+      if (row) row.classList.add("line-hl");
+    }
+  }
+
+  // Tab label shows file name only (no line suffix — line context is in the highlight)
+  ensureTab(layerId, fname, "◧");
+  activateTab(layerId);
 
   if (targetLine) {
     requestAnimationFrame(() => {
-      const scroll = document.getElementById("code-scroll");
+      const scroll = document.getElementById(`code-scroll-${layerId}`);
       const hlRow = linesEl.querySelector(`[data-line="${targetLine}"]`);
-      if (hlRow) scroll.scrollTop = Math.max(0, hlRow.offsetTop - scroll.clientHeight / 2.5);
+      if (hlRow && scroll) scroll.scrollTop = Math.max(0, hlRow.offsetTop - scroll.clientHeight / 2.5);
     });
   }
 }
@@ -702,31 +906,12 @@ function openTrace(source, affected) {
     el.innerHTML = `<span class="trace-dot ${item.type}"></span>
       <span class="trace-path">${esc(item.path)}</span>
       <span class="trace-badge ${item.type}">${item.type}</span>`;
-    el.addEventListener("click", () => openCodeViewer(item.path, 1));
+    el.addEventListener("click", () => openCodeViewer(item.path, null));
     list.appendChild(el);
   });
 
-  // Inject trace tab if not already present
-  if (!document.getElementById("tab-trace")) {
-    const tab = document.createElement("button");
-    tab.className = "ctx-tab";
-    tab.id = "tab-trace";
-    const srcName = source.split("/").pop();
-    tab.innerHTML = `⇢ ${esc(srcName)} <span class="tab-close" title="Close">×</span>`;
-    tab.addEventListener("click", e => {
-      if (e.target.classList.contains("tab-close")) {
-        tab.remove();
-        if (currentLayer === "trace") activateTab("arch");
-      } else {
-        activateTab("trace");
-      }
-    });
-    document.getElementById("tab-arch").insertAdjacentElement("afterend", tab);
-  } else {
-    const srcName = source.split("/").pop();
-    document.getElementById("tab-trace").innerHTML =
-      `⇢ ${esc(srcName)} <span class="tab-close" title="Close">×</span>`;
-  }
+  const srcName = source.split("/").pop();
+  ensureTab("trace", srcName, "⇢");
   activateTab("trace");
 }
 
@@ -735,11 +920,6 @@ function openTrace(source, affected) {
 const messagesEl = document.getElementById("messages");
 const inputEl    = document.getElementById("chat-input");
 const sendBtn    = document.getElementById("send-btn");
-
-// Conversation history sent to the backend. Raw text only (no HTML).
-// Mirrors the Turn schema in app/query.py.
-const chatHistory = [];
-const HISTORY_TURNS_TO_SEND = 6;
 
 function esc(s) {
   return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
@@ -751,28 +931,29 @@ function appendMsg(role, html, response) {
 
   const label = document.createElement("span");
   label.className = "msg-label";
-  label.textContent = role === "user" ? "You" : "Nemotron";
+  label.textContent = role === "user" ? "You" : "AccliMate";
   wrap.appendChild(label);
 
   const bubble = document.createElement("div");
   bubble.className = "bubble";
   bubble.innerHTML = html;
 
+  // Wire up inline citation chips injected by formatAnswer
+  bubble.querySelectorAll(".inline-cite").forEach(chip => {
+    chip.addEventListener("click", () =>
+      openCodeViewer(chip.dataset.path, +chip.dataset.start, +chip.dataset.end));
+  });
+
   if (response) {
-    if (response.type === "answer" && response.mode_used) {
-      const badge = document.createElement("div");
-      badge.className = "mode-badge " + response.mode_used;
-      badge.textContent = response.mode_used === "deep" ? "deep · 49B + RAG" : "fast · 8B";
-      bubble.appendChild(badge);
-    }
     if (response.type === "answer" && response.citations?.length) {
       const chips = document.createElement("div");
       chips.className = "citations";
       response.citations.forEach(c => {
         const chip = document.createElement("span");
         chip.className = "cite-chip";
-        chip.textContent = `${c.path}:${c.line}`;
-        chip.addEventListener("click", () => openCodeViewer(c.path, c.line));
+            const endStr = c.end_line && c.end_line !== c.start_line ? `-${c.end_line}` : '';
+            chip.textContent = `${c.path}:${c.start_line}${endStr}`;
+        chip.addEventListener("click", () => openCodeViewer(c.path, c.start_line, c.end_line || c.start_line));
         chips.appendChild(chip);
       });
       bubble.appendChild(chips);
@@ -801,258 +982,499 @@ function showThinking() {
 }
 function removeThinking() { document.getElementById("_thinking")?.remove(); }
 
-function formatAnswer(text) {
+function formatAnswer(text, citations) {
   let html = esc(text);
-  // Fenced code blocks
+  // Fenced code blocks (must run before inline-code)
   html = html.replace(/```[\w]*\n([\s\S]*?)```/g, (_, code) =>
     `<pre style="background:rgba(255,255,255,.05);padding:10px 14px;border-radius:6px;overflow-x:auto;font-family:var(--font-code);font-size:12px;margin:8px 0;white-space:pre-wrap"><code>${code}</code></pre>`);
-  // Inline code
-  html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+  // Inline code — file paths become clickable cite-chips; other code stays <code>
+  html = html.replace(/`([^`\n]+)`/g, (_, inner) => {
+    // Looks like a file path: contains / or . and a recognised extension
+    if (/[./]/.test(inner) && /\.(py|js|ts|tsx|jsx|go|rs|java|cpp|cs|rb|md|toml|yaml|yml|json|sh|env)$/i.test(inner.trim())) {
+      const filePath = inner.trim();
+      return `<span class="cite-chip inline-cite" data-path="${esc(filePath)}" data-start="0" data-end="0">${esc(filePath.split('/').pop())}</span>`;
+    }
+    return `<code>${inner}</code>`;
+  });
+  // Headings
+  html = html.replace(/^### (.+)$/gm, '<strong style="font-size:13px;color:var(--text-1)">$1</strong>');
+  html = html.replace(/^## (.+)$/gm,  '<strong style="font-size:14px;color:var(--text-1)">$1</strong>');
+  html = html.replace(/^# (.+)$/gm,   '<strong style="font-size:15px;color:var(--text-1)">$1</strong>');
+  // Bold / italic
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/\*([^*\n]+)\*/g,  '<em>$1</em>');
+  // Inline citation markers [path:line] or [path:start-end] → cite-chip spans
+  // path arrives already HTML-escaped from esc(text) above, so unescape before re-escaping into attrs
+  html = html.replace(/\[([^\]\n]+):(\d+)(?:-(\d+))?\]/g, (match, escapedPath, start, end) => {
+    const filePath = escapedPath.replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>');
+    const s = parseInt(start, 10);
+    const e = end ? parseInt(end, 10) : s;
+    const endStr = e !== s ? `-${e}` : '';
+    const fname = esc(filePath.split('/').pop());
+    return `<span class="cite-chip inline-cite" data-path="${esc(filePath)}" data-start="${s}" data-end="${e}">${fname}:${s}${endStr}</span>`;
+  });
   // Newlines
   html = html.replace(/\n/g, '<br>');
   return html;
 }
 
-function createStreamingBubble() {
-  /* Build an empty assistant bubble we'll fill in as tokens stream in.
-     Returns refs to the bubble (for content) and wrap (for badges/chips). */
-  const wrap = document.createElement("div");
-  wrap.className = "msg msg-assistant";
-  const label = document.createElement("span");
-  label.className = "msg-label";
-  label.textContent = "Nemotron";
-  wrap.appendChild(label);
-  const bubble = document.createElement("div");
-  bubble.className = "bubble";
-  const body = document.createElement("div");
-  body.className = "bubble-body";
-  bubble.appendChild(body);
-  wrap.appendChild(bubble);
-  messagesEl.appendChild(wrap);
-  messagesEl.scrollTop = messagesEl.scrollHeight;
-  return { wrap, bubble, body };
+// ── Chat mode registry ────────────────────────────────────────────────────────
+// Each mode is a pluggable object implementing the contract below. Adding a new
+// mode (e.g. speech-to-speech) means adding one object and a toggle button —
+// no changes to the dispatcher, renderer, or input handlers.
+//
+// Contract:
+//   id          string
+//   label       string (display in toggle)
+//   placeholder string (input placeholder)
+//   async send(text, ctx) -> responseObj  — performs fetch, returns raw data
+//   render(responseObj, bubbleEl, ctx)    — builds DOM inside the assistant bubble
+
+async function qaSend(text) {
+  const res = await fetch(`${API}/query`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ repo_id: REPO_ID, question: text, scope: currentScope || null }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || "Query failed");
+  return data;
 }
 
-function attachAssistantExtras(bubble, citations, toolTrace) {
-  if (citations && citations.length) {
+function qaRender(data, bubble) {
+  const citations = (data.citations || []).map(c => ({
+    path: c.file_path, start_line: c.start_line, end_line: c.end_line || c.start_line,
+  }));
+  bubble.innerHTML = formatAnswer(data.answer || "", citations);
+  // Wire inline cite-chips injected by formatAnswer
+  bubble.querySelectorAll(".inline-cite").forEach(chip => {
+    chip.addEventListener("click", () =>
+      openCodeViewer(chip.dataset.path, +chip.dataset.start, +chip.dataset.end));
+  });
+  if (citations.length) {
     const chips = document.createElement("div");
     chips.className = "citations";
     citations.forEach(c => {
       const chip = document.createElement("span");
       chip.className = "cite-chip";
-      chip.textContent = `${c.file_path}:${c.start_line}`;
-      chip.addEventListener("click", () => openCodeViewer(c.file_path, c.start_line));
+      const endStr = c.end_line !== c.start_line ? `-${c.end_line}` : "";
+      chip.textContent = `${c.path}:${c.start_line}${endStr}`;
+      chip.addEventListener("click", () => openCodeViewer(c.path, c.start_line, c.end_line));
       chips.appendChild(chip);
     });
     bubble.appendChild(chips);
   }
-
-  if (toolTrace && toolTrace.length) {
-    const details = document.createElement("details");
-    details.className = "agent-trace";
-    const summary = document.createElement("summary");
-    summary.textContent = `Used ${toolTrace.length} tool${toolTrace.length !== 1 ? "s" : ""}`;
-    details.appendChild(summary);
-
-    const stepsDiv = document.createElement("div");
-    stepsDiv.className = "agent-trace-steps";
-    toolTrace.forEach(step => {
-      const stepEl = document.createElement("div");
-      stepEl.className = "trace-step";
-
-      const toolEl = document.createElement("div");
-      toolEl.className = "trace-step-tool";
-      const argsStr = step.args ? JSON.stringify(step.args) : "";
-      toolEl.textContent = `${step.name}(${argsStr})`;
-      stepEl.appendChild(toolEl);
-
-      const resultEl = document.createElement("div");
-      resultEl.className = "trace-step-result";
-      resultEl.textContent = step.result || "(no output)";
-      stepEl.appendChild(resultEl);
-
-      stepsDiv.appendChild(stepEl);
-    });
-    details.appendChild(stepsDiv);
-    bubble.appendChild(details);
-  }
 }
 
-function showStatus(bubbleRefs, text) {
-  bubbleRefs.body.innerHTML = `<span class="stream-status">${esc(text)}</span>`;
-  messagesEl.scrollTop = messagesEl.scrollHeight;
-}
-
-function _renderLiveSteps(bodyEl, steps, statusText) {
-  let html = '<div class="agent-live-steps">';
-  steps.forEach((step, i) => {
-    const isDone = step.result !== null;
-    const iconClass = isDone ? "done" : "pending";
-    const iconContent = isDone ? "✓" : "";
-    const argsSnippet = step.args ? Object.values(step.args).join(", ") : "";
-    const label = `<span class="tool-name">${esc(step.name)}</span>` +
-      (argsSnippet ? `(<span style="color:var(--text-3)">${esc(argsSnippet.slice(0, 50))}</span>)` : "");
-    html += `<div class="agent-live-step">
-      <span class="step-icon ${iconClass}">${iconContent}</span>
-      <span class="step-label">${label}</span>
-    </div>`;
+async function narrativeSend(text) {
+  const res = await fetch(`${API}/narrative/${encodeURIComponent(REPO_ID)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question: text }),
   });
-  html += '</div>';
-  if (statusText) {
-    html += `<span class="stream-status" style="margin-top:6px">${esc(statusText)}</span>`;
+  const data = await res.json();
+  if (!res.ok) {
+    const d = data.detail;
+    const msg = typeof d === "string" ? d : (d && d.message) ? d.message : "Narrative failed";
+    const err = new Error(msg);
+    if (d && d.raw) err.raw = d.raw;
+    throw err;
   }
-  bodyEl.innerHTML = html;
+  return data;
 }
 
-// Rotating status phrases shown client-side between backend status events
-const _WAITING_PHRASES = [
-  "Reading through the code…",
-  "Looking deeper…",
-  "Almost there…",
-  "Still working on it…",
-  "Checking a few more things…",
-  "Piecing things together…",
-];
-let _statusTimer = null;
-function _startStatusRotation(bubbleRefs, liveSteps, isAgent) {
-  _stopStatusRotation();
+function narrativeRender(data, bubble) {
+  const steps = (data.steps || []).filter(s => s && (s.narration || "").trim().length > 0);
+  if (!steps.length) {
+    bubble.innerHTML = `<span style="color:var(--red)">No narrative steps returned.</span>`;
+    return;
+  }
+
+  const question = data.question || "";
+
+  bubble.innerHTML = "";
+  const player = document.createElement("div");
+  player.className = "narrative-player";
+  bubble.appendChild(player);
+
+  const stepEl = document.createElement("div");
+  stepEl.className = "narrative-step";
+  player.appendChild(stepEl);
+
+  const citationsEl = document.createElement("div");
+  citationsEl.className = "citations";
+  player.appendChild(citationsEl);
+
+  const controls = document.createElement("div");
+  controls.className = "narrative-controls";
+  const prevBtn = document.createElement("button");
+  prevBtn.className = "narrative-nav-btn"; prevBtn.textContent = "← Prev";
+  const nextBtn = document.createElement("button");
+  nextBtn.className = "narrative-nav-btn"; nextBtn.textContent = "Next →";
+  const replayBtn = document.createElement("button");
+  replayBtn.className = "narrative-nav-btn narrative-replay-btn";
+  replayBtn.innerHTML = `<span>↻</span><span>Replay</span>`;
+  const stopBtn = document.createElement("button");
+  stopBtn.className = "narrative-nav-btn narrative-stop-btn";
+  stopBtn.innerHTML = `<span>■</span><span>Stop</span>`;
+  const counter = document.createElement("span");
+  counter.className = "narrative-step-counter";
+  controls.append(prevBtn, nextBtn, replayBtn, stopBtn, counter);
+  player.appendChild(controls);
+
+  replayBtn.addEventListener("click", () => {
+    if (!window.__systemDiagram) return;
+    // Switch to System tab so the replay is visible, then re-run the step
+    if (currentLayer !== "system") activateTab("system");
+    window.__systemDiagram.setActiveStep(steps[idx]);
+  });
+
+  stopBtn.addEventListener("click", () => {
+    if (!window.__systemDiagram) return;
+    // Stop clears highlights, edge activation, and the parked particle.
+    window.__systemDiagram.clearStep();
+  });
+
+  // Row holding the "Zoom into X" button (only shown when a component is highlighted)
+  const zoomRow = document.createElement("div");
+  zoomRow.className = "narrative-zoom-row";
+  zoomRow.style.display = "none";
+  const zoomBtn = document.createElement("button");
+  zoomBtn.className = "narrative-zoom-btn";
+  zoomBtn.innerHTML = `<span class="zoom-glyph">⤢</span><span class="zoom-label">Zoom in</span>`;
+  zoomRow.appendChild(zoomBtn);
+  player.appendChild(zoomRow);
+
+  // Container for the zoom deep-dive panel (populated on demand)
+  const zoomPanel = document.createElement("div");
+  zoomPanel.style.display = "none";
+  player.appendChild(zoomPanel);
+
   let idx = 0;
-  _statusTimer = setInterval(() => {
-    const phrase = _WAITING_PHRASES[idx % _WAITING_PHRASES.length];
-    idx++;
-    if (isAgent && liveSteps.length > 0) {
-      _renderLiveSteps(bubbleRefs.body, liveSteps, phrase);
+  let zoomTargetId = null; // the component id the current step can zoom into
+  let zoomTargetLabel = null;
+  let isZoomOpen = false;  // true once zoomed in; stays true until the user zooms out
+
+  function applyZoomButtonState() {
+    if (isZoomOpen) {
+      zoomBtn.disabled = true;
+      zoomBtn.classList.add("is-zoomed");
+      zoomBtn.title = "Already zoomed in — use Zoom out to return";
+      zoomBtn.querySelector(".zoom-glyph").textContent = "✓";
+      zoomBtn.querySelector(".zoom-label").textContent =
+        `Zoomed into ${zoomTargetLabel || zoomTargetId || "component"}`;
     } else {
-      showStatus(bubbleRefs, phrase);
+      zoomBtn.classList.remove("is-zoomed");
+      zoomBtn.title = "";
+      zoomBtn.querySelector(".zoom-glyph").textContent = "⤢";
+      // Label is set by updateZoomButton based on the active step's highlight.
     }
-    messagesEl.scrollTop = messagesEl.scrollHeight;
-  }, 3000);
+  }
+
+  function closeZoomPanel() {
+    zoomPanel.style.display = "none";
+    zoomPanel.innerHTML = "";
+    isZoomOpen = false;
+    if (window.__systemDiagram) {
+      window.__systemDiagram.resetZoom();
+      // Replay the main animation for the current step once we're zoomed back out
+      window.__systemDiagram.setActiveStep(steps[idx]);
+    }
+    zoomBtn.disabled = false;
+    updateZoomButton(steps[idx]);
+  }
+
+  async function openZoomPanel(componentId) {
+    zoomPanel.style.display = "block";
+    zoomPanel.innerHTML = `<div class="zoom-loading">Zooming into component…</div>`;
+    zoomBtn.disabled = true;
+
+    if (window.__systemDiagram) window.__systemDiagram.zoomToNode(componentId);
+
+    try {
+      const res = await fetch(`${API}/zoom/${encodeURIComponent(REPO_ID)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          component_id: componentId,
+          question,
+          narration: steps[idx]?.narration || "",
+        }),
+      });
+      const zd = await res.json();
+      if (!res.ok) {
+        const d = zd.detail;
+        const msg = typeof d === "string" ? d : (d && d.message) ? d.message : "Zoom failed";
+        zoomPanel.innerHTML = `<div class="zoom-error">${esc(msg)}</div>`;
+        isZoomOpen = false;
+        zoomBtn.disabled = false;
+        applyZoomButtonState();
+        return;
+      }
+      renderZoomDetail(zd);
+      isZoomOpen = true;
+      // Keep the label fresh in case the LLM returned a different resolved label
+      zoomTargetLabel = zd.component_label || zoomTargetLabel;
+      applyZoomButtonState();
+    } catch (err) {
+      zoomPanel.innerHTML = `<div class="zoom-error">${esc(String(err.message || err))}</div>`;
+      isZoomOpen = false;
+      zoomBtn.disabled = false;
+      applyZoomButtonState();
+    }
+  }
+
+  function renderZoomDetail(zd) {
+    zoomPanel.innerHTML = "";
+    const panel = document.createElement("div");
+    panel.className = "zoom-panel";
+
+    const header = document.createElement("div");
+    header.className = "zoom-panel-header";
+    const title = document.createElement("span");
+    title.className = "zoom-panel-title";
+    title.textContent = zd.component_label || zd.component_id || "Component";
+    const kind = document.createElement("span");
+    kind.className = "zoom-panel-kind";
+    kind.textContent = zd.component_kind || "";
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "zoom-panel-close";
+    closeBtn.innerHTML = `<span>⤡</span><span>Zoom out</span>`;
+    closeBtn.addEventListener("click", closeZoomPanel);
+    header.append(title, kind, closeBtn);
+    panel.appendChild(header);
+
+    const body = document.createElement("div");
+    body.className = "zoom-panel-body";
+    const zoomCitations = (zd.citations || []).map(c => ({
+      path: c.file_path, start_line: c.start_line, end_line: c.end_line || c.start_line,
+    }));
+    body.innerHTML = formatAnswer(zd.deep_dive || "", zoomCitations);
+    body.querySelectorAll(".inline-cite").forEach(chip => {
+      chip.addEventListener("click", () =>
+        openCodeViewer(chip.dataset.path, +chip.dataset.start, +chip.dataset.end));
+    });
+    panel.appendChild(body);
+
+    if ((zd.involved_files || []).length) {
+      const sec = document.createElement("div");
+      sec.className = "zoom-section";
+      const t = document.createElement("div");
+      t.className = "zoom-section-title"; t.textContent = "Files";
+      const row = document.createElement("div");
+      row.className = "zoom-chip-row";
+      zd.involved_files.forEach(f => {
+        const chip = document.createElement("span");
+        chip.className = "zoom-chip clickable";
+        const path = document.createElement("span");
+        const fEndStr = f.end_line && f.end_line !== f.start_line ? `-${f.end_line}` : "";
+        path.textContent = f.start_line ? `${f.file_path}:${f.start_line}${fEndStr}` : f.file_path;
+        chip.appendChild(path);
+        if (f.role) {
+          const r = document.createElement("span");
+          r.className = "zoom-chip-role";
+          r.textContent = "— " + f.role;
+          chip.appendChild(r);
+        }
+        chip.addEventListener("click", () => openCodeViewer(f.file_path, f.start_line || null, f.end_line || f.start_line || null));
+        row.appendChild(chip);
+      });
+      sec.append(t, row);
+      panel.appendChild(sec);
+    }
+
+    if ((zd.tools || []).length) {
+      const sec = document.createElement("div");
+      sec.className = "zoom-section";
+      const t = document.createElement("div");
+      t.className = "zoom-section-title"; t.textContent = "Tools & libraries";
+      const row = document.createElement("div");
+      row.className = "zoom-chip-row";
+      zd.tools.forEach(tool => {
+        const chip = document.createElement("span");
+        chip.className = "zoom-chip tool";
+        chip.textContent = tool;
+        row.appendChild(chip);
+      });
+      sec.append(t, row);
+      panel.appendChild(sec);
+    }
+
+    if ((zd.citations || []).length) {
+      const sec = document.createElement("div");
+      sec.className = "zoom-section";
+      const t = document.createElement("div");
+      t.className = "zoom-section-title"; t.textContent = "Citations";
+      const row = document.createElement("div");
+      row.className = "zoom-chip-row";
+      zd.citations.forEach(c => {
+        const chip = document.createElement("span");
+        chip.className = "zoom-chip clickable";
+        const cEnd = c.end_line || c.start_line || null;
+        const cEndStr = cEnd && cEnd !== c.start_line ? `-${cEnd}` : "";
+        chip.textContent = c.start_line ? `${c.file_path}:${c.start_line}${cEndStr}` : c.file_path;
+        chip.addEventListener("click", () => openCodeViewer(c.file_path, c.start_line || null, cEnd));
+        row.appendChild(chip);
+      });
+      sec.append(t, row);
+      panel.appendChild(sec);
+    }
+
+    zoomPanel.appendChild(panel);
+  }
+
+  function updateZoomButton(step) {
+    const highlights = Array.isArray(step.highlight) ? step.highlight : [];
+    if (!highlights.length || !window.__systemDiagram) {
+      zoomRow.style.display = "none";
+      zoomTargetId = null;
+      zoomTargetLabel = null;
+      return;
+    }
+    // Pick the first highlighted component we can resolve. If the diagram
+    // hasn't loaded yet, fall back to the raw id so the label still renders.
+    let targetId = highlights[0];
+    let label = targetId;
+    for (const h of highlights) {
+      const comp = window.__systemDiagram.getComponent?.(h);
+      if (comp) {
+        targetId = comp.id;
+        label = comp.label || comp.id;
+        break;
+      }
+    }
+    zoomTargetId = targetId;
+    zoomTargetLabel = label;
+    zoomRow.style.display = "flex";
+    if (isZoomOpen) {
+      applyZoomButtonState();
+    } else {
+      zoomBtn.querySelector(".zoom-label").textContent = `Zoom into ${label}`;
+    }
+  }
+
+  zoomBtn.addEventListener("click", () => {
+    if (!zoomTargetId) return;
+    openZoomPanel(zoomTargetId);
+  });
+
+  function renderStep(i) {
+    // Close any open zoom panel when navigating between steps
+    if (zoomPanel.style.display !== "none") {
+      zoomPanel.style.display = "none";
+      zoomPanel.innerHTML = "";
+      if (window.__systemDiagram) window.__systemDiagram.resetZoom();
+    }
+    isZoomOpen = false;
+    zoomBtn.disabled = false;
+
+    idx = Math.max(0, Math.min(steps.length - 1, i));
+    const s = steps[idx];
+    const stepCitations = (s.citations || []).map(c => ({
+      path: c.file_path, start_line: c.start_line, end_line: c.end_line || c.start_line,
+    }));
+    stepEl.innerHTML = formatAnswer(s.narration || "", stepCitations);
+    stepEl.querySelectorAll(".inline-cite").forEach(chip => {
+      chip.addEventListener("click", () =>
+        openCodeViewer(chip.dataset.path, +chip.dataset.start, +chip.dataset.end));
+    });
+
+    citationsEl.innerHTML = "";
+    stepCitations.forEach(c => {
+      const chip = document.createElement("span");
+      chip.className = "cite-chip";
+      const endStr = c.end_line !== c.start_line ? `-${c.end_line}` : "";
+      chip.textContent = `${c.path}:${c.start_line}${endStr}`;
+      chip.addEventListener("click", () => openCodeViewer(c.path, c.start_line, c.end_line));
+      citationsEl.appendChild(chip);
+    });
+
+    counter.textContent = `Step ${idx + 1} / ${steps.length}`;
+    prevBtn.disabled = idx === 0;
+    nextBtn.disabled = idx === steps.length - 1;
+
+    // Auto-switch to System tab so the user can see the new action, and
+    // kick off the one-shot animation for this step.
+    if (currentLayer !== "system") activateTab("system");
+    if (window.__systemDiagram) window.__systemDiagram.setActiveStep(s);
+
+    updateZoomButton(s);
+    applyZoomButtonState();
+  }
+
+  prevBtn.addEventListener("click", () => renderStep(idx - 1));
+  nextBtn.addEventListener("click", () => renderStep(idx + 1));
+  renderStep(0);
 }
-function _stopStatusRotation() {
-  if (_statusTimer) { clearInterval(_statusTimer); _statusTimer = null; }
+
+const ChatModes = {
+  qa: {
+    id: "qa",
+    label: "Q&A",
+    placeholder: "Ask anything about this codebase…",
+    send: qaSend,
+    render: qaRender,
+  },
+  narrative: {
+    id: "narrative",
+    label: "Narrative",
+    placeholder: "Ask me to narrate a flow — e.g. how does a user's question reach the database?",
+    send: narrativeSend,
+    render: narrativeRender,
+  },
+  // future modes (speech-to-speech, debate, etc.) plug in here
+};
+
+let currentMode = ChatModes.qa;
+
+function setChatMode(modeId) {
+  const mode = ChatModes[modeId];
+  if (!mode) return;
+  currentMode = mode;
+  inputEl.placeholder = mode.placeholder;
+  document.querySelectorAll(".mode-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.mode === mode.id);
+  });
 }
+
+document.querySelectorAll(".mode-btn").forEach(btn => {
+  btn.addEventListener("click", () => setChatMode(btn.dataset.mode));
+});
 
 async function sendMessage() {
   const text = inputEl.value.trim();
   if (!text) return;
+  const mode = currentMode;
   inputEl.value = ""; inputEl.style.height = "auto";
   sendBtn.disabled = true;
   appendMsg("user", esc(text));
+  showThinking();
 
-  const historyToSend = chatHistory.slice(-HISTORY_TURNS_TO_SEND);
-  chatHistory.push({ role: "user", content: text });
-
-  let accumulated = "";
-  let finalAnswer = null;
-  let citations = [];
-  let toolTrace = [];
-  let sawFirstToken = false;
-  let liveSteps = [];
-  let lastStatus = "";
-
-  const bubbleRefs = createStreamingBubble();
-  const endpoint = useAgentMode ? "/agent" : "/query";
-  const isAgent = useAgentMode;
-  showStatus(bubbleRefs, isAgent ? "Analyzing your question…" : "Sending…");
-  _startStatusRotation(bubbleRefs, liveSteps, isAgent);
-
+  // Build an empty assistant bubble upfront so mode.render can populate it
   try {
-    const res = await fetch(`${API}${endpoint}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        repo_id: REPO_ID,
-        question: text,
-        scope: currentScope || null,
-        history: historyToSend,
-      }),
-    });
-    if (!res.ok) {
-      const errBody = await res.json().catch(() => ({}));
-      throw new Error(errBody.detail || `HTTP ${res.status}`);
-    }
-
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop();
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        let event;
-        try { event = JSON.parse(line); }
-        catch { continue; }
-
-        if (event.type === "status") {
-          lastStatus = event.text;
-          _stopStatusRotation();
-          if (!sawFirstToken) {
-            if (isAgent && liveSteps.length > 0) {
-              _renderLiveSteps(bubbleRefs.body, liveSteps, lastStatus);
-            } else {
-              showStatus(bubbleRefs, lastStatus);
-            }
-          }
-          _startStatusRotation(bubbleRefs, liveSteps, isAgent);
-        } else if (event.type === "tool_call") {
-          _stopStatusRotation();
-          liveSteps.push({ name: event.name, args: event.args, result: null });
-          toolTrace.push({ name: event.name, args: event.args, result: "" });
-          if (!sawFirstToken) {
-            _renderLiveSteps(bubbleRefs.body, liveSteps, lastStatus);
-          }
-          _startStatusRotation(bubbleRefs, liveSteps, isAgent);
-        } else if (event.type === "tool_result") {
-          _stopStatusRotation();
-          const ix = typeof event.idx === "number" ? event.idx : liveSteps.length - 1;
-          const liveStep = liveSteps[ix];
-          if (liveStep) liveStep.result = event.result ?? "(done)";
-          const traceStep = typeof event.idx === "number" ? toolTrace[event.idx] : toolTrace[toolTrace.length - 1];
-          if (traceStep) traceStep.result = event.result ?? "";
-          if (!sawFirstToken) {
-            _renderLiveSteps(bubbleRefs.body, liveSteps, "");
-          }
-          _startStatusRotation(bubbleRefs, liveSteps, isAgent);
-        } else if (event.type === "token") {
-          _stopStatusRotation();
-          if (!sawFirstToken) {
-            bubbleRefs.body.innerHTML = "";
-            bubbleRefs.body.classList.add("streaming-cursor");
-            sawFirstToken = true;
-          }
-          accumulated += event.text;
-          bubbleRefs.body.innerHTML = formatAnswer(accumulated);
-        } else if (event.type === "done") {
-          _stopStatusRotation();
-          bubbleRefs.body.classList.remove("streaming-cursor");
-          finalAnswer = event.answer || accumulated || "(no response)";
-          citations = event.citations || [];
-          if (event.tool_trace && event.tool_trace.length) toolTrace = event.tool_trace;
-          bubbleRefs.body.innerHTML = formatAnswer(finalAnswer);
-          attachAssistantExtras(bubbleRefs.bubble, citations, toolTrace);
-        } else if (event.type === "error") {
-          _stopStatusRotation();
-          bubbleRefs.body.classList.remove("streaming-cursor");
-          const msg = `<span style="color:var(--red)">${esc(event.message)}</span>`;
-          bubbleRefs.body.innerHTML = (accumulated ? formatAnswer(accumulated) + "<br>" : "") + msg;
-        }
-      }
-      messagesEl.scrollTop = messagesEl.scrollHeight;
-    }
-
-    chatHistory.push({ role: "assistant", content: finalAnswer ?? accumulated });
+    const data = await mode.send(text, { REPO_ID, API });
+    removeThinking();
+    const wrap = document.createElement("div");
+    wrap.className = "msg msg-assistant";
+    const label = document.createElement("span");
+    label.className = "msg-label"; label.textContent = "Nemotron";
+    wrap.appendChild(label);
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+    wrap.appendChild(bubble);
+    messagesEl.appendChild(wrap);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+    mode.render(data, bubble, { REPO_ID, API });
+    messagesEl.scrollTop = messagesEl.scrollHeight;
   } catch (err) {
-    _stopStatusRotation();
-    bubbleRefs.body.classList.remove("streaming-cursor");
-    bubbleRefs.body.innerHTML = `<span style="color:var(--red)">${esc(String(err.message || err))}</span>`;
-    chatHistory.pop();
+    removeThinking();
+    let html = `<span style="color:var(--red)">${esc(String(err.message || err))}</span>`;
+    if (err.raw) {
+      html += `<details style="margin-top:8px"><summary style="cursor:pointer;color:var(--text-3);font-size:11px">Show raw response</summary>`
+           +  `<pre style="background:rgba(0,0,0,.25);color:var(--text-2);font-family:var(--font-code);font-size:11px;padding:8px;border-radius:4px;white-space:pre-wrap;margin-top:6px">${esc(err.raw)}</pre></details>`;
+    }
+    appendMsg("assistant", html, null);
   } finally {
-    _stopStatusRotation();
     sendBtn.disabled = false;
   }
 }
@@ -1060,6 +1482,8 @@ async function sendMessage() {
 sendBtn.addEventListener("click", sendMessage);
 inputEl.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
 inputEl.addEventListener("input", () => { inputEl.style.height = "auto"; inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + "px"; });
+// Set initial placeholder from the default mode
+inputEl.placeholder = currentMode.placeholder;
 
 // Update topbar repo label immediately
 document.getElementById("topbar-repo").textContent = REPO_LABEL;
@@ -1081,218 +1505,469 @@ document.getElementById("topbar-repo").textContent = REPO_LABEL;
   }
 })();
 
-// ── Architecture D3 (ARCH-02) ─────────────────────────────────────────────────
+// ── Architecture D3 ────────────────────────────────────────────────────────────
 
-const LANGUAGE_COLORS = {
-  python:     "#4B8BBE",
-  javascript: "#F7DF1E",
-  typescript: "#3178C6",
-  tsx:        "#61DAFB",
-  go:         "#00ADD8",
-  rust:       "#CE422B",
-  java:       "#B07219",
-  cpp:        "#F34B7D",
-  c_sharp:    "#178600",
-  unknown:    "#888888",
-};
-
-let _archRoot = null;
-let _archSvgSel = null;
-let _archZoom = null;
-let _archData = null;
-let _archRendered = false;
-const ARCH_NODE_WIDTH = 220;
-const ARCH_NODE_HEIGHT = 22;
-
-// The code viewer alias — the spec uses window.__openCodeViewer
-window.__openCodeViewer = (filePath, startLine) => openCodeViewer(filePath, startLine);
-
-async function loadArchDiagram(repoId) {
-  if (_archData) { _renderArch(); return; }
-  try {
-    const res = await fetch(`${API}/architecture/${encodeURIComponent(repoId)}`);
-    if (!res.ok) throw new Error("Architecture data unavailable");
-    _archData = await res.json();
-    const counts = document.getElementById("arch-counts");
-    if (counts) counts.textContent =
-      `${_archData.total_files} files · ${_archData.total_folders} folders`;
-    _renderArch();
-  } catch (err) {
-    console.error("Architecture diagram:", err.message);
-  }
-}
-
-function _renderArch() {
-  _archRendered = true;
-  const container = document.getElementById("layer-arch");
-  const W = container.clientWidth  || 900;
-  const H = container.clientHeight || 620;
-
-  _archSvgSel = d3.select("#arch-svg").attr("viewBox", [0, 0, W, H]);
-  _archSvgSel.selectAll("*").remove();
-
-  const g = _archSvgSel.append("g").attr("transform", `translate(60, ${H / 2})`);
-  _archSvgSel._g = g;
-
-  _archZoom = d3.zoom().scaleExtent([0.05, 3]).on("zoom", e => g.attr("transform", e.transform));
-  _archSvgSel.call(_archZoom);
-  _archSvgSel.call(_archZoom.transform, d3.zoomIdentity.translate(60, H / 2));
-
-  _archRoot = d3.hierarchy(_archData.tree, d => d.children);
-  _archRoot.x0 = 0;
-  _archRoot.y0 = 0;
-
-  // Collapse all folders except root so large repos stay readable
-  _archRoot.descendants().forEach(d => {
-    if (d.depth > 0 && d.data.type === "folder" && d.children) {
-      d._children = d.children;
-      d.children = null;
-    }
-  });
-
-  _archUpdate(_archRoot, g);
-}
-
-function _archUpdate(source, g) {
-  const treeLayout = d3.tree().nodeSize([ARCH_NODE_HEIGHT + 4, ARCH_NODE_WIDTH]);
-  treeLayout(_archRoot);
-
-  const nodes = _archRoot.descendants();
-  const links = _archRoot.links();
-  const duration = 300;
-
-  // Links
-  const link = g.selectAll(".arch-link").data(links, d => d.target.data.id);
-
-  link.join(
-    enter => enter.append("path").attr("class", "arch-link")
-      .attr("d", () => {
-        const o = { x: source.x0 || 0, y: source.y0 || 0 };
-        return _archLinkPath({ source: o, target: o });
-      }),
-    update => update,
-    exit => exit.transition().duration(duration)
-      .attr("d", () => {
-        const o = { x: source.x, y: source.y };
-        return _archLinkPath({ source: o, target: o });
-      }).remove()
-  ).transition().duration(duration).attr("d", _archLinkPath);
-
-  // Nodes
-  const node = g.selectAll(".arch-node").data(nodes, d => d.data.id);
-
-  const nodeEnter = node.enter().append("g")
-    .attr("class", d => `arch-node arch-node-${d.data.type}`)
-    .attr("transform", () => `translate(${source.y0 || 0},${source.x0 || 0})`)
-    .style("opacity", 0)
-    .on("click", (e, d) => {
-      if (d.data.type === "folder") {
-        _archToggle(d);
-        _archUpdate(d, g);
-      } else {
-        window.__openCodeViewer(d.data.id, 1);
+function _buildArchTree(files, repoLabel) {
+  const root = { id: "/", name: repoLabel || "repo", type: "folder", children: [] };
+  const map = { "/": root };
+  const langMap = { py:"python", js:"javascript", ts:"typescript", tsx:"tsx", jsx:"javascript",
+    go:"go", rs:"rust", java:"java", cpp:"cpp", cs:"c_sharp" };
+  files.sort().forEach(filePath => {
+    const parts = filePath.split("/");
+    let parentId = "/";
+    parts.forEach((part, i) => {
+      const isLeaf = i === parts.length - 1;
+      const nodeId = parentId === "/" ? part : parentId + "/" + part;
+      if (!map[nodeId]) {
+        const ext = part.split(".").pop();
+        const node = {
+          id: nodeId, name: part,
+          type: isLeaf ? "file" : "folder",
+          language: isLeaf ? (langMap[ext] || "unknown") : undefined,
+          children: isLeaf ? undefined : [],
+        };
+        map[nodeId] = node;
+        (map[parentId].children = map[parentId].children || []).push(node);
       }
+      parentId = nodeId;
     });
-
-  nodeEnter.append("circle")
-    .attr("r", d => d.data.type === "folder" ? 8 : 5)
-    .attr("fill", d => {
-      if (d.data.type === "folder") return d._children ? "#374151" : "#6B7280";
-      return LANGUAGE_COLORS[d.data.language] || LANGUAGE_COLORS.unknown;
-    })
-    .attr("stroke", "#1e1e2e")
-    .attr("stroke-width", 1.5)
-    .attr("cursor", "pointer");
-
-  nodeEnter.append("text")
-    .attr("x", d => d.data.type === "folder" ? 14 : 10)
-    .attr("dy", "0.35em")
-    .attr("cursor", "pointer")
-    .text(d => {
-      const n = d.data.name;
-      return n.length > 28 ? n.slice(0, 25) + "…" : n;
-    });
-
-  nodeEnter.filter(d => d.data.type === "folder").append("text")
-    .attr("class", "arch-expand-icon")
-    .attr("x", -14).attr("dy", "0.35em")
-    .attr("fill", "#6B7280").attr("font-size", "10px")
-    .text(d => d._children ? "▶" : d.children ? "▼" : "");
-
-  const nodeUpdate = nodeEnter.merge(node);
-  nodeUpdate.transition().duration(duration)
-    .attr("transform", d => `translate(${d.y},${d.x})`)
-    .style("opacity", 1);
-
-  nodeUpdate.select("circle")
-    .attr("fill", d => {
-      if (d.data.type === "folder") return d._children ? "#374151" : "#6B7280";
-      return LANGUAGE_COLORS[d.data.language] || LANGUAGE_COLORS.unknown;
-    });
-  nodeUpdate.select(".arch-expand-icon")
-    .text(d => d._children ? "▶" : d.children ? "▼" : "");
-
-  node.exit().transition().duration(duration)
-    .attr("transform", () => `translate(${source.y},${source.x})`)
-    .style("opacity", 0).remove();
-
-  nodes.forEach(d => { d.x0 = d.x; d.y0 = d.y; });
-}
-
-function _archLinkPath(d) {
-  return `M ${d.target.y} ${d.target.x}
-          C ${(d.target.y + d.source.y) / 2} ${d.target.x},
-            ${(d.target.y + d.source.y) / 2} ${d.source.x},
-            ${d.source.y} ${d.source.x}`;
-}
-
-function _archToggle(d) {
-  if (d.children) {
-    d._children = d.children;
-    d.children = null;
-  } else {
-    d.children = d._children;
-    d._children = null;
-  }
-}
-
-function archExpandAll() {
-  if (!_archRoot || !_archSvgSel) return;
-  _archRoot.descendants().forEach(d => {
-    if (d._children) { d.children = d._children; d._children = null; }
   });
-  _archUpdate(_archRoot, _archSvgSel._g);
+  return root;
 }
 
-function archCollapseAll() {
-  if (!_archRoot || !_archSvgSel) return;
-  _archRoot.descendants().forEach(d => {
-    if (d.depth > 0 && d.children) { d._children = d.children; d.children = null; }
+function initArch(treeData) {
+  const container = document.getElementById("layer-arch");
+  const W = container.clientWidth || 800;
+  const H = container.clientHeight || 600;
+  const svg = d3.select("#arch-svg");
+  svg.selectAll("*").remove();
+  const g = svg.append("g");
+
+  const zoom = d3.zoom().scaleExtent([0.15, 4]).on("zoom", e => g.attr("transform", e.transform));
+  svg.call(zoom);
+
+  const resetView = () =>
+    svg.transition().duration(350).call(zoom.transform, d3.zoomIdentity.translate(W * 0.1, H / 2).scale(0.88));
+
+  const root = d3.hierarchy(treeData);
+  root.x0 = H / 2; root.y0 = 0;
+  root.descendants().forEach(d => {
+    if (d.depth >= 2 && d.children) { d._children = d.children; d.children = null; }
   });
-  _archUpdate(_archRoot, _archSvgSel._g);
-}
 
-function resetArchZoom() {
-  if (_archZoom && _archSvgSel) {
-    const H = document.getElementById("layer-arch").clientHeight || 620;
-    _archSvgSel.transition().duration(300)
-      .call(_archZoom.transform, d3.zoomIdentity.translate(60, H / 2));
+  const tree = d3.tree().nodeSize([20, 190]);
+  const LANG_COLOR = { python:"#4B8BBE", javascript:"#F7DF1E", typescript:"#3178C6",
+    tsx:"#3178C6", go:"#00ADD8", rust:"#CE422B", java:"#ED8B00", cpp:"#659AD2", unknown:"#6B7280" };
+
+  function update(src) {
+    const q = (document.getElementById("arch-search")?.value || "").toLowerCase();
+    tree(root);
+    const nodes = root.descendants(), links = root.links();
+
+    const link = g.selectAll(".al").data(links, d => d.target.data.id);
+    link.enter().append("path").attr("class","al")
+      .attr("fill","none").attr("stroke","rgba(255,255,255,0.07)").attr("stroke-width",1)
+      .merge(link).transition().duration(220)
+      .attr("d", d3.linkHorizontal().x(d => d.y).y(d => d.x));
+    link.exit().remove();
+
+    const node = g.selectAll(".an").data(nodes, d => d.data.id);
+    const enter = node.enter().append("g").attr("class","an")
+      .attr("transform", `translate(${src.y0},${src.x0})`).style("cursor","pointer")
+      .on("click", (_, d) => {
+        if (d.data.type === "file") { openCodeViewer(d.data.id, null); return; }
+        if (d.children) { d._children = d.children; d.children = null; }
+        else { d.children = d._children; d._children = null; }
+        update(d);
+      });
+    enter.append("circle").attr("r",5).attr("stroke","rgba(255,255,255,0.1)").attr("stroke-width",1);
+    enter.append("text").attr("dy","0.32em").attr("font-family","var(--font-code)").attr("font-size","11px").attr("fill","var(--text-2)");
+
+    const m = enter.merge(node);
+    m.transition().duration(220).attr("transform", d => `translate(${d.y},${d.x})`);
+    m.select("circle").attr("fill", d =>
+      d.data.type === "folder" ? (d.children ? "#6B7280" : "#374151") : (LANG_COLOR[d.data.language] || LANG_COLOR.unknown)
+    )
+      .attr("r", d => (q && d.data.name.toLowerCase().includes(q)) ? 7 : 5)
+      .attr("stroke", d => (q && d.data.name.toLowerCase().includes(q)) ? "var(--cyan)" : "rgba(255,255,255,0.1)")
+      .attr("stroke-width", d => (q && d.data.name.toLowerCase().includes(q)) ? 2 : 1);
+
+    m.select("text")
+      .attr("x", d => (d.children || d._children) ? -9 : 9)
+      .attr("text-anchor", d => (d.children || d._children) ? "end" : "start")
+      .text(d => d.data.name)
+      .attr("fill", d => (q && d.data.name.toLowerCase().includes(q)) ? "var(--cyan)" : "var(--text-2)")
+      .attr("font-weight", d => (q && d.data.name.toLowerCase().includes(q)) ? "600" : "normal");
+
+    node.exit().transition().duration(220).attr("transform", `translate(${src.y},${src.x})`).remove();
+    nodes.forEach(d => { d.x0 = d.x; d.y0 = d.y; });
   }
+
+  update(root);
+  resetView();
+
+  window.archExpandAll = () => {
+    root.descendants().forEach(d => { if (d._children) { d.children = d._children; d._children = null; } });
+    update(root);
+  };
+  window.archCollapseAll = () => {
+    root.descendants().forEach(d => { if (d.depth > 0 && d.children) { d._children = d.children; d.children = null; } });
+    update(root);
+  };
+  window.resetArchZoom = resetView;
+
+  window.archSearch = (query) => {
+    const q = query.toLowerCase();
+    if (q) {
+      root.eachBefore(d => {
+        if (d.data.name.toLowerCase().includes(q)) {
+          let p = d.parent;
+          while (p) {
+            if (p._children) { p.children = p._children; p._children = null; }
+            p = p.parent;
+          }
+        }
+      });
+    }
+    update(root);
+  };
 }
 
-function archSearch(query) {
-  if (!_archRoot || !_archSvgSel) return;
-  const q = query.toLowerCase().trim();
-  if (q) archExpandAll();
-  _archSvgSel.selectAll(".arch-node")
-    .classed("arch-node-match", d => q.length > 0 && d.data.name.toLowerCase().includes(q));
-  if (!q) {
-    _archSvgSel.selectAll(".arch-node").classed("arch-node-match", false);
+// Start with an empty placeholder, then load real file tree
+initArch({ id: "/", name: REPO_LABEL, type: "folder", children: [] });
+(async () => {
+  try {
+    const res = await fetch(`${API}/files/${encodeURIComponent(REPO_ID)}`);
+    if (res.ok) {
+      const data = await res.json();
+      initArch(_buildArchTree(data.files, REPO_LABEL));
+    }
+  } catch (_) { /* arch stays empty — not critical */ }
+})();
+
+// ── System diagram (logical components) ───────────────────────────────────────
+
+(function initSystemDiagram() {
+  const KIND_COLOR = {
+    ui:       "#7aa2f7",  // blue
+    service:  "#bb9af7",  // purple
+    database: "#9ece6a",  // green
+    external: "#e0af68",  // yellow
+    queue:    "#7dcfff",  // cyan
+    worker:   "#f7768e",  // red
+    cache:    "#c0caf5",  // light
+  };
+
+  let _sysData = null;
+  let _sysLoaded = false;
+  let _sysLoading = false;
+  let _sysSim = null;
+  let _sysNodes = null;       // d3 selection of .system-node groups
+  let _sysEdges = null;       // d3 selection of .system-edge paths
+  let _sysSvg = null;
+  let _sysG = null;
+  let _sysZoom = null;
+  let _stepToken = 0;  // increments on every clearStep/setActiveStep so old animation loops exit
+
+  function showOverlay(text, isError, raw) {
+    const el = document.getElementById("system-overlay");
+    const txt = document.getElementById("system-overlay-text");
+    el.classList.toggle("error", !!isError);
+    el.classList.add("visible");
+    txt.innerHTML = "";
+    const msg = document.createElement("div");
+    msg.textContent = text;
+    txt.appendChild(msg);
+    if (raw) {
+      const pre = document.createElement("pre");
+      pre.textContent = raw;
+      txt.appendChild(pre);
+    }
   }
-}
 
-// Kick off the initial load
-if (REPO_ID) loadArchDiagram(REPO_ID);
+  function hideOverlay() {
+    document.getElementById("system-overlay").classList.remove("visible");
+  }
+
+  async function load(repoId, opts = {}) {
+    if (_sysLoaded && !opts.force) return;
+    if (_sysLoading) return;
+    _sysLoading = true;
+    showOverlay("Analyzing system architecture…", false);
+    try {
+      const url = opts.force
+        ? `${API}/system/${encodeURIComponent(repoId)}/regenerate`
+        : `${API}/system/${encodeURIComponent(repoId)}`;
+      const res = await fetch(url, { method: opts.force ? "POST" : "GET" });
+      const data = await res.json();
+      if (!res.ok) {
+        const d = data.detail;
+        const msg = typeof d === "string" ? d : (d && d.message) ? d.message : "Failed to load system diagram";
+        const raw = d && d.raw ? d.raw : null;
+        showOverlay(msg, true, raw);
+        return;
+      }
+      _sysData = data;
+      _sysLoaded = true;
+      _render();
+      hideOverlay();
+    } catch (err) {
+      showOverlay(String(err.message || err), true);
+    } finally {
+      _sysLoading = false;
+    }
+  }
+
+  function _render() {
+    const container = document.getElementById("layer-system");
+    const W = container.clientWidth  || 900;
+    const H = container.clientHeight || 620;
+
+    _sysSvg = d3.select("#system-svg").attr("viewBox", [0, 0, W, H]);
+    // Clear any previous render but keep the <defs> (arrow markers)
+    _sysSvg.selectAll("g.system-root").remove();
+
+    _sysG = _sysSvg.append("g").attr("class", "system-root");
+
+    _sysZoom = d3.zoom().scaleExtent([0.3, 3]).on("zoom", e => _sysG.attr("transform", e.transform));
+    _sysSvg.call(_sysZoom);
+
+    const components = (_sysData.components || []).map(c => ({...c}));
+    const edges = (_sysData.edges || []).map(e => ({
+      ...e, source: e.from, target: e.to,
+    }));
+
+    // Update toolbar status
+    document.getElementById("system-status").textContent =
+      `${components.length} components · ${edges.length} edges`;
+
+    // Seed positions using kind so layout is more readable. Spread nodes
+    // across more of the vertical space so we don't start with stacks of 2-3
+    // components on top of each other.
+    const LANES = { ui: 0.12, service: 0.5, cache: 0.6, queue: 0.65, worker: 0.55, database: 0.88, external: 0.88 };
+    const n = Math.max(components.length, 1);
+    components.forEach((c, i) => {
+      const laneX = (LANES[c.kind] ?? 0.5) * W;
+      c.x = laneX + (Math.random() - 0.5) * 60;
+      c.y = H * (0.12 + (i / n) * 0.76) + (Math.random() - 0.5) * 50;
+    });
+
+    // Force simulation — spacings tuned so the dormant graph breathes rather
+    // than clumping. Weaker lane pull + stronger repulsion + bigger collide
+    // radius = components don't sit on top of each other.
+    _sysSim = d3.forceSimulation(components)
+      .force("link", d3.forceLink(edges).id(d => d.id).distance(230).strength(0.35))
+      .force("charge", d3.forceManyBody().strength(-1400))
+      .force("collide", d3.forceCollide().radius(d => Math.max((d._w || 140) / 2, 60) + 24))
+      .force("x", d3.forceX(c => (LANES[c.kind] ?? 0.5) * W).strength(0.12))
+      .force("y", d3.forceY(H / 2).strength(0.03))
+      .alphaDecay(0.028);
+
+    // Edges layer — each edge is a group containing a wide invisible hit path,
+    // the visible arc, and its label. Grouping lets CSS show the label on
+    // :hover without needing JS mouse handlers per edge.
+    const edgeLayer = _sysG.append("g").attr("class", "system-edges");
+    const edgeGroups = edgeLayer.selectAll("g").data(edges).enter()
+      .append("g")
+      .attr("class", "system-edge-group")
+      .attr("data-edge-id", d => d.id);
+
+    const edgeHits = edgeGroups.append("path")
+      .attr("class", "system-edge-hit");
+
+    _sysEdges = edgeGroups.append("path")
+      .attr("class", "system-edge")
+      .attr("data-edge-id", d => d.id);
+
+    const edgeLabels = edgeGroups.append("text")
+      .attr("class", "system-edge-label")
+      .attr("data-edge-id", d => d.id)
+      .attr("text-anchor", "middle")
+      .text(d => d.label || "");
+
+    // Node layer
+    const nodeLayer = _sysG.append("g").attr("class", "system-nodes");
+    _sysNodes = nodeLayer.selectAll("g").data(components).enter()
+      .append("g")
+      .attr("class", "system-node")
+      .attr("data-id", d => d.id)
+      .style("cursor", "grab")
+      .call(d3.drag()
+        .on("start", (e, d) => { if (!e.active) _sysSim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+        .on("drag",  (e, d) => { d.fx = e.x; d.fy = e.y; })
+        .on("end",   (e, d) => { if (!e.active) _sysSim.alphaTarget(0); d.fx = null; d.fy = null; })
+      );
+
+    _sysNodes.append("rect")
+      .attr("rx", 8).attr("ry", 8)
+      .attr("fill", d => "rgba(36, 36, 58, 0.92)")
+      .attr("stroke", d => KIND_COLOR[d.kind] || "#6B7280")
+      .attr("stroke-width", 1.5);
+
+    _sysNodes.append("text")
+      .attr("class", "system-node-label")
+      .attr("fill", "#e4e4f0")
+      .attr("x", 0).attr("y", -2)
+      .attr("text-anchor", "middle")
+      .text(d => d.label || d.id);
+
+    _sysNodes.append("text")
+      .attr("class", "system-node-kind")
+      .attr("x", 0).attr("y", 14)
+      .attr("text-anchor", "middle")
+      .text(d => d.kind || "");
+
+    // Size each rect to fit its label
+    _sysNodes.each(function(d) {
+      const g = d3.select(this);
+      const labelNode = g.select(".system-node-label").node();
+      const bbox = labelNode.getBBox();
+      const w = Math.max(120, bbox.width + 28);
+      const h = 42;
+      g.select("rect")
+        .attr("x", -w / 2).attr("y", -h / 2)
+        .attr("width", w).attr("height", h);
+      d._w = w; d._h = h;
+    });
+
+    _sysSim.on("tick", () => {
+      const pathFor = d => {
+        const sx = d.source.x, sy = d.source.y, tx = d.target.x, ty = d.target.y;
+        const dx = tx - sx, dy = ty - sy;
+        const dr = Math.sqrt(dx * dx + dy * dy) * 1.4 || 1;
+        return `M${sx},${sy}A${dr},${dr} 0 0,1 ${tx},${ty}`;
+      };
+      _sysEdges.attr("d", pathFor);
+      edgeHits.attr("d", pathFor);
+      edgeLabels
+        .attr("x", d => (d.source.x + d.target.x) / 2)
+        .attr("y", d => (d.source.y + d.target.y) / 2 - 4);
+      _sysNodes.attr("transform", d => `translate(${d.x},${d.y})`);
+    });
+  }
+
+  function clearStep() {
+    _stepToken++;
+    if (!_sysSvg) return;
+    _sysSvg.selectAll(".system-node").classed("active", false);
+    _sysSvg.selectAll(".system-edge")
+      .classed("active", false)
+      .attr("marker-end", "url(#system-arrow)")
+      .attr("marker-start", null);
+    _sysSvg.selectAll(".system-edge-label").classed("active", false);
+    _sysSvg.selectAll(".system-particle, .system-particle-label").remove();
+  }
+
+  function setActiveStep(step) {
+    if (!_sysSvg || !step) return;
+    clearStep();
+    const myToken = ++_stepToken;
+
+    // Highlight components
+    const highlight = new Set(step.highlight || []);
+    _sysSvg.selectAll(".system-node")
+      .classed("active", d => highlight.has(d.id));
+
+    // Animate data flow along the named edge
+    const anim = step.animate;
+    if (!anim || !anim.edge) return;
+
+    const edgePath = _sysSvg.select(`path.system-edge[data-edge-id="${anim.edge}"]`);
+    if (edgePath.empty()) return;
+
+    const reversed = anim.direction === "reverse";
+    edgePath.classed("active", true)
+      .attr("marker-end",   reversed ? null : "url(#system-arrow-active)")
+      .attr("marker-start", reversed ? "url(#system-arrow-active)" : null);
+    // Reveal the label for the active edge (stays visible until clearStep)
+    _sysSvg.select(`.system-edge-label[data-edge-id="${anim.edge}"]`).classed("active", true);
+
+    const pathNode = edgePath.node();
+
+    const particle = _sysG.append("circle")
+      .attr("class", "system-particle")
+      .attr("r", 5);
+
+    let labelEl = null;
+    if (anim.label) {
+      labelEl = _sysG.append("text")
+        .attr("class", "system-particle-label")
+        .attr("text-anchor", "middle")
+        .attr("dy", -10)
+        .text(anim.label);
+    }
+
+    const duration = 1400;
+    const started = performance.now();
+
+    function frame(now) {
+      // Exit if a newer step replaced us, or the particle was removed
+      if (myToken !== _stepToken) return;
+      if (!particle.node() || !particle.node().parentNode) return;
+
+      const cycle = now - started;
+      const totalLen = pathNode.getTotalLength();
+      if (cycle < duration) {
+        const t = cycle / duration;
+        const tt = reversed ? 1 - t : t;
+        const pt = pathNode.getPointAtLength(totalLen * tt);
+        particle.attr("cx", pt.x).attr("cy", pt.y);
+        if (labelEl) labelEl.attr("x", pt.x).attr("y", pt.y);
+        requestAnimationFrame(frame);
+      } else {
+        // One-shot animation ends — remove particle + trail label so the diagram is clean.
+        particle.remove();
+        if (labelEl) labelEl.remove();
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+
+  function zoomToNode(nodeId, opts = {}) {
+    if (!_sysSvg || !_sysZoom) return;
+    const sel = _sysSvg.select(`.system-node[data-id="${nodeId}"]`);
+    if (sel.empty()) return;
+    const d = sel.datum();
+    if (!d || d.x == null || d.y == null) return;
+
+    const container = document.getElementById("layer-system");
+    const W = container.clientWidth  || 900;
+    const H = container.clientHeight || 620;
+    const scale = opts.scale || 1.8;
+    // Center the node in the viewport at the requested scale.
+    const tx = W / 2 - d.x * scale;
+    const ty = H / 2 - d.y * scale;
+    _sysSvg.transition().duration(600)
+      .call(_sysZoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+  }
+
+  function resetZoom() {
+    if (!_sysSvg || !_sysZoom) return;
+    _sysSvg.transition().duration(500)
+      .call(_sysZoom.transform, d3.zoomIdentity);
+  }
+
+  function getComponent(nodeId) {
+    if (!_sysData) return null;
+    return (_sysData.components || []).find(c => c.id === nodeId) || null;
+  }
+
+  window.__systemDiagram = {
+    load,
+    setActiveStep,
+    clearStep,
+    zoomToNode,
+    resetZoom,
+    getComponent,
+    isLoaded: () => _sysLoaded,
+    reload: (repoId) => { _sysLoaded = false; _sysData = null; load(repoId, { force: true }); },
+  };
+
+  // "Regenerate" button bypasses the cache
+  document.getElementById("system-regen-btn")?.addEventListener("click", () => {
+    if (REPO_ID) window.__systemDiagram.reload(REPO_ID);
+  });
+})();
 
 // ── Resizable divider ──────────────────────────────────────────────────────────
 
