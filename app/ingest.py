@@ -7,7 +7,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 from llama_index.core import Document
 from llama_index.core.node_parser import CodeSplitter
 from pydantic import BaseModel
@@ -15,6 +15,13 @@ from pydantic import BaseModel
 from constants import EXCLUDE_DIRS, INCLUDE_EXTENSIONS, LANGUAGE_MAP
 from db import collection_exists, get_client, get_or_create_collection
 from deps_builder import build_dependency_graph
+from progress import (
+    INDEXING_PROGRESS,
+    PROGRESS_LOCK,
+    get_progress,
+    set_progress,
+)
+from projects import upsert_project
 
 
 def _force_remove_readonly(func, path, _exc_info):
@@ -242,7 +249,7 @@ def _get_embed_model():
     return _FallbackAdapter(), "local"
 
 
-def embed_and_store(chunks: list[dict], repo_id: str) -> int:
+def embed_and_store(chunks: list[dict], repo_id: str, _progress_repo: str | None = None) -> int:
     """Embed chunks in batches and write to the repo's Chroma collection. Returns total stored."""
     if not chunks:
         return 0
@@ -304,11 +311,62 @@ def embed_and_store(chunks: list[dict], repo_id: str) -> int:
         )
         total_stored += len(batch)
 
+        if _progress_repo:
+            pct = 40 + int(55 * (i + len(batch)) / max(1, len(chunks)))
+            set_progress(
+                _progress_repo,
+                percent=min(95, pct),
+                current_file=batch[0]["file_path"],
+                files_processed=total_stored,
+                total_files=len(chunks),
+            )
+
     return total_stored
 
 
+def _run_pipeline(repo_id: str, repo_url: str) -> None:
+    clone_path: str | None = None
+    try:
+        set_progress(repo_id, stage="cloning", percent=5, message="Cloning repository...", error=None)
+        clone_path = clone_repo(repo_url, repo_id)
+
+        set_progress(repo_id, stage="collecting", percent=18, message="Scanning files...")
+        files = collect_files(clone_path)
+        set_progress(repo_id, total_files=len(files), percent=25)
+
+        set_progress(repo_id, stage="chunking", percent=30, message="Chunking source...")
+        chunks = chunk_files(files)
+
+        set_progress(repo_id, stage="embedding", percent=40, message="Embedding chunks...")
+        chunk_count = embed_and_store(chunks, repo_id, _progress_repo=repo_id)
+
+        set_progress(repo_id, stage="finalizing", percent=96, message="Building dep graph...")
+        build_dependency_graph(files, clone_path, repo_id)
+        os.makedirs("deps", exist_ok=True)
+        with open(f"deps/{repo_id}_files.json", "w", encoding="utf-8") as fh:
+            json.dump([f["rel_path"] for f in files], fh)
+
+        upsert_project(repo_id, repo_url, chunk_count)
+        set_progress(repo_id, stage="done", percent=100, message=f"{chunk_count} chunks")
+    except HTTPException as e:
+        try:
+            get_client().delete_collection(repo_id)
+        except Exception:
+            pass
+        set_progress(repo_id, stage="error", error=str(e.detail))
+    except Exception as e:
+        try:
+            get_client().delete_collection(repo_id)
+        except Exception:
+            pass
+        set_progress(repo_id, stage="error", error=str(e))
+    finally:
+        if clone_path:
+            cleanup_clone(repo_id)
+
+
 @router.post("/index")
-async def index_repo(request: IndexRequest):
+async def index_repo(request: IndexRequest, background_tasks: BackgroundTasks):
     validate_url(request.repo_url)
     repo_id = get_repo_id(request.repo_url)
 
@@ -327,35 +385,34 @@ async def index_repo(request: IndexRequest):
         except Exception:
             pass
 
-    clone_path: str | None = None
-    try:
-        clone_path = clone_repo(request.repo_url, repo_id)
-        files = collect_files(clone_path)
-        chunks = chunk_files(files)
-        build_dependency_graph(files, clone_path, repo_id)
-        chunk_count = embed_and_store(chunks, repo_id)
+    # Concurrency guard: if a run is already in flight for this repo, just say so.
+    with PROGRESS_LOCK:
+        cur = INDEXING_PROGRESS.get(repo_id)
+        if cur and cur.stage not in ("done", "error"):
+            return {"repo_id": repo_id, "status": "indexing"}
 
-        os.makedirs("deps", exist_ok=True)
-        with open(f"deps/{repo_id}_files.json", "w", encoding="utf-8") as fh:
-            json.dump([f["rel_path"] for f in files], fh)
+    set_progress(repo_id, stage="queued", percent=0, error=None, message="Queued",
+                 current_file=None, files_processed=0, total_files=0)
+    background_tasks.add_task(_run_pipeline, repo_id, request.repo_url)
+    return {"repo_id": repo_id, "status": "indexing"}
 
-        return {"repo_id": repo_id, "status": "indexed", "chunk_count": chunk_count}
-    except HTTPException:
-        # Roll back partial Chroma writes so the repo isn't half-indexed
-        try:
-            get_client().delete_collection(repo_id)
-        except Exception:
-            pass
-        raise
-    except Exception as e:
-        try:
-            get_client().delete_collection(repo_id)
-        except Exception:
-            pass
-        raise HTTPException(status_code=500, detail=f"Indexing failed: {e}")
-    finally:
-        if clone_path:
-            cleanup_clone(repo_id)
+
+@router.get("/index/progress/{repo_id}")
+def get_index_progress(repo_id: str):
+    p = get_progress(repo_id)
+    if p:
+        return p.model_dump()
+    if collection_exists(repo_id) and get_or_create_collection(repo_id).count() > 0:
+        return {
+            "stage": "done",
+            "percent": 100,
+            "message": "already indexed",
+            "current_file": None,
+            "files_processed": 0,
+            "total_files": 0,
+            "error": None,
+        }
+    raise HTTPException(status_code=404, detail="Unknown repo_id")
 
 
 @router.get("/status/{repo_id}")
