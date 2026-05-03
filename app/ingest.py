@@ -413,6 +413,7 @@ async def index_repo(request: IndexRequest, background_tasks: BackgroundTasks):
         collection = get_or_create_collection(repo_id)
         n = collection.count()
         if n > 0:
+            upsert_project(repo_id, request.repo_url, n)
             return {
                 "repo_id": repo_id,
                 "status": "already_indexed",
