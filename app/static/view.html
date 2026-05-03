@@ -315,6 +315,281 @@
     .trace-badge.direct     { background: rgba(247,118,142,.12); color: var(--red);    border: 1px solid rgba(247,118,142,.22); }
     .trace-badge.transitive { background: rgba(224,175,104,.12); color: var(--yellow); border: 1px solid rgba(224,175,104,.22); }
 
+    /* ── Chat mode toggle ── */
+    #mode-toggle {
+      margin-left: auto; display: inline-flex; gap: 2px;
+      background: var(--bg-active); border: 1px solid var(--border-md);
+      border-radius: 6px; padding: 2px;
+    }
+    .mode-btn {
+      font-family: var(--font-ui); font-size: 11px; font-weight: 500;
+      color: var(--text-2); background: none; border: none; border-radius: 4px;
+      padding: 4px 10px; cursor: pointer; transition: background .12s, color .12s;
+    }
+    .mode-btn:hover { color: var(--text-1); }
+    .mode-btn.active {
+      background: rgba(122,162,247,.15); color: var(--blue);
+    }
+
+    /* ── Narrative player (inside assistant bubble) ── */
+    .narrative-player { display: flex; flex-direction: column; gap: 10px; }
+    .narrative-step {
+      font-size: 13.5px; line-height: 1.7;
+    }
+    .narrative-controls {
+      display: flex; align-items: center; gap: 10px;
+      padding-top: 8px; border-top: 1px solid var(--border);
+    }
+    .narrative-nav-btn {
+      font-family: var(--font-ui); font-size: 11px; font-weight: 500;
+      background: var(--bg-raised); color: var(--text-1);
+      border: 1px solid var(--border-md); border-radius: 4px;
+      padding: 4px 12px; cursor: pointer; transition: background .12s;
+    }
+    .narrative-nav-btn:hover:not(:disabled) { background: var(--bg-hover); }
+    .narrative-nav-btn:disabled { opacity: .35; cursor: default; }
+    .narrative-replay-btn,
+    .narrative-stop-btn {
+      display: inline-flex; align-items: center; gap: 5px;
+    }
+    .narrative-replay-btn {
+      color: var(--cyan);
+      border-color: rgba(125, 207, 255, 0.35);
+      background: rgba(125, 207, 255, 0.06);
+    }
+    .narrative-replay-btn:hover:not(:disabled) {
+      background: rgba(125, 207, 255, 0.14);
+      border-color: rgba(125, 207, 255, 0.55);
+    }
+    .narrative-stop-btn {
+      color: var(--red);
+      border-color: rgba(247, 118, 142, 0.35);
+      background: rgba(247, 118, 142, 0.06);
+    }
+    .narrative-stop-btn:hover:not(:disabled) {
+      background: rgba(247, 118, 142, 0.14);
+      border-color: rgba(247, 118, 142, 0.55);
+    }
+    .narrative-step-counter {
+      margin-left: auto; font-family: var(--font-code); font-size: 11px;
+      color: var(--text-2);
+    }
+
+    /* ── Narrative zoom (per-component deep dive) ── */
+    .narrative-zoom-row {
+      display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+      padding-top: 2px;
+    }
+    .narrative-zoom-btn {
+      font-family: var(--font-ui); font-size: 11.5px; font-weight: 500;
+      background: rgba(125, 207, 255, 0.08); color: var(--cyan);
+      border: 1px solid rgba(125, 207, 255, 0.35); border-radius: 4px;
+      padding: 5px 12px; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 6px;
+      transition: background .12s, border-color .12s, transform .08s;
+    }
+    .narrative-zoom-btn:hover:not(:disabled) {
+      background: rgba(125, 207, 255, 0.15); border-color: rgba(125, 207, 255, 0.6);
+    }
+    .narrative-zoom-btn:active:not(:disabled) { transform: translateY(1px); }
+    .narrative-zoom-btn:disabled { opacity: .45; cursor: default; }
+    .narrative-zoom-btn.is-zoomed {
+      opacity: 1;
+      color: var(--green);
+      background: rgba(158, 206, 106, 0.08);
+      border-color: rgba(158, 206, 106, 0.45);
+      cursor: not-allowed;
+    }
+    .narrative-zoom-btn .zoom-glyph { font-size: 12px; }
+
+    .zoom-panel {
+      margin-top: 10px;
+      background: rgba(125, 207, 255, 0.04);
+      border: 1px solid rgba(125, 207, 255, 0.25);
+      border-radius: 6px;
+      padding: 12px 14px 14px;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .zoom-panel-header {
+      display: flex; align-items: center; gap: 10px;
+      padding-bottom: 8px; border-bottom: 1px solid rgba(125, 207, 255, 0.18);
+    }
+    .zoom-panel-title {
+      font-family: var(--font-ui); font-size: 13px; font-weight: 600;
+      color: var(--text-1); letter-spacing: .02em;
+    }
+    .zoom-panel-kind {
+      font-family: var(--font-code); font-size: 10px;
+      color: var(--cyan); background: rgba(125, 207, 255, 0.12);
+      border: 1px solid rgba(125, 207, 255, 0.3);
+      padding: 2px 6px; border-radius: 3px;
+      text-transform: uppercase; letter-spacing: .06em;
+    }
+    .zoom-panel-close {
+      margin-left: auto;
+      font-family: var(--font-ui); font-size: 11px; font-weight: 500;
+      background: var(--bg-raised); color: var(--text-1);
+      border: 1px solid var(--border-md); border-radius: 4px;
+      padding: 4px 10px; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 5px;
+    }
+    .zoom-panel-close:hover { background: var(--bg-hover); }
+
+    .zoom-panel-body {
+      font-size: 13px; line-height: 1.65; color: var(--text-1);
+    }
+    .zoom-panel-body code {
+      font-family: var(--font-code); font-size: 12px;
+      background: rgba(255,255,255,0.06);
+      padding: 1px 5px; border-radius: 3px;
+    }
+    .zoom-panel-body pre {
+      background: rgba(0,0,0,.3); border: 1px solid var(--border);
+      padding: 8px 10px; border-radius: 4px; overflow-x: auto;
+      font-family: var(--font-code); font-size: 12px;
+    }
+
+    .zoom-section-title {
+      font-family: var(--font-ui); font-size: 10.5px; font-weight: 600;
+      color: var(--text-3); text-transform: uppercase; letter-spacing: .08em;
+      margin-bottom: 2px;
+    }
+    .zoom-chip-row {
+      display: flex; flex-wrap: wrap; gap: 6px;
+    }
+    .zoom-chip {
+      font-family: var(--font-code); font-size: 11px;
+      background: rgba(255,255,255,0.04);
+      color: var(--text-1);
+      border: 1px solid var(--border-md);
+      border-radius: 3px; padding: 3px 8px;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .zoom-chip.clickable { cursor: pointer; transition: background .1s, border-color .1s; }
+    .zoom-chip.clickable:hover { background: rgba(125, 207, 255, 0.1); border-color: rgba(125, 207, 255, 0.45); }
+    .zoom-chip.tool {
+      color: var(--yellow); border-color: rgba(224, 175, 104, 0.3);
+      background: rgba(224, 175, 104, 0.06);
+    }
+    .zoom-chip-role {
+      color: var(--text-3); font-size: 10.5px;
+      font-family: var(--font-ui);
+    }
+
+    .zoom-loading {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12.5px; color: var(--text-2);
+    }
+    .zoom-loading::before {
+      content: ""; width: 12px; height: 12px; border-radius: 50%;
+      border: 2px solid rgba(125, 207, 255, 0.25);
+      border-top-color: var(--cyan);
+      animation: zoom-spin 0.9s linear infinite;
+    }
+    @keyframes zoom-spin { to { transform: rotate(360deg); } }
+
+    .zoom-error {
+      color: var(--red); font-size: 12.5px;
+    }
+
+    /* ── System tab ── */
+    #layer-system { background: var(--bg-main); }
+    #system-toolbar {
+      position: absolute; top: 10px; right: 12px;
+      display: flex; gap: 6px; z-index: 5; align-items: center;
+      background: rgba(22,22,30,.75); padding: 6px 10px;
+      border: 1px solid var(--border); border-radius: 6px;
+      backdrop-filter: blur(6px);
+    }
+    #system-status {
+      font-family: var(--font-code); font-size: 11px; color: var(--text-2);
+      padding-right: 4px;
+    }
+    #system-svg { width: 100%; height: 100%; display: block; cursor: grab; }
+    #system-svg:active { cursor: grabbing; }
+
+    .system-node rect {
+      transition: stroke .2s, filter .2s;
+    }
+    .system-node text {
+      font-family: var(--font-code); font-size: 12px;
+      user-select: none; pointer-events: none;
+    }
+    .system-node-kind {
+      font-size: 9px !important; fill: var(--text-3);
+      text-transform: uppercase; letter-spacing: .06em;
+    }
+    .system-node.active rect {
+      stroke: var(--yellow) !important; stroke-width: 2.5 !important;
+      filter: drop-shadow(0 0 8px rgba(224,175,104,.55));
+    }
+
+    .system-edge {
+      fill: none; stroke: rgba(255,255,255,0.12); stroke-width: 1.5;
+      marker-end: url(#system-arrow);
+      transition: stroke .15s;
+    }
+    /* Invisible but wide hit area so hovering near an edge reveals its label */
+    .system-edge-hit {
+      fill: none; stroke: transparent; stroke-width: 18;
+      pointer-events: stroke; cursor: help;
+    }
+    .system-edge-label {
+      font-family: var(--font-code); font-size: 10px;
+      fill: var(--text-3); pointer-events: none;
+      opacity: 0; transition: opacity .15s, fill .15s;
+    }
+    /* Reveal the label when the user hovers the edge group, or when it's
+       activated by narrative mode. */
+    .system-edge-group:hover .system-edge-label,
+    .system-edge-label.active {
+      opacity: 1;
+    }
+    .system-edge-group:hover .system-edge:not(.active) {
+      stroke: rgba(255,255,255,0.28);
+    }
+    .system-edge.active {
+      stroke: var(--cyan); stroke-width: 2.5;
+    }
+    .system-edge-label.active {
+      fill: var(--cyan); font-weight: 600;
+    }
+    .system-particle {
+      fill: var(--cyan);
+      filter: drop-shadow(0 0 4px rgba(125,207,255,.8));
+    }
+    .system-particle-label {
+      font-family: var(--font-code); font-size: 10px;
+      fill: var(--cyan); font-weight: 600;
+      pointer-events: none;
+    }
+
+    #system-overlay {
+      position: absolute; inset: 36px 0 0 0;
+      display: none; align-items: center; justify-content: center;
+      flex-direction: column; gap: 12px;
+      background: rgba(22,22,30,.85); z-index: 4;
+      font-size: 13px; color: var(--text-2);
+    }
+    #system-overlay.visible { display: flex; }
+    #system-overlay .spin {
+      width: 24px; height: 24px;
+      border: 2px solid var(--border-md);
+      border-top-color: var(--blue);
+      border-radius: 50%;
+      animation: sys-spin 0.9s linear infinite;
+    }
+    @keyframes sys-spin { to { transform: rotate(360deg); } }
+    #system-overlay.error .spin { display: none; }
+    #system-overlay.error { color: var(--red); text-align: center; padding: 20px; }
+    #system-overlay pre {
+      max-width: 80%; max-height: 180px; overflow: auto;
+      background: rgba(0,0,0,.25); color: var(--text-2);
+      font-family: var(--font-code); font-size: 11px;
+      padding: 10px; border-radius: 4px; text-align: left;
+      white-space: pre-wrap; word-break: break-word;
+    }
+
     ::-webkit-scrollbar { width: 5px; height: 5px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: var(--bg-hover); border-radius: 3px; }
@@ -335,7 +610,10 @@
   <div id="left-pane">
     <div id="chat-header">
       <h2>Assistant</h2>
-      <span class="scope-pill">⊙ Whole codebase</span>
+      <div id="mode-toggle" role="tablist" aria-label="Chat mode">
+        <button class="mode-btn active" data-mode="qa">Q&amp;A</button>
+        <button class="mode-btn" data-mode="narrative">Narrative</button>
+      </div>
     </div>
     <div id="messages"></div>
     <div id="input-area">
@@ -356,6 +634,7 @@
     <div id="ctx-bar">
       <!-- persistent tabs -->
       <button class="ctx-tab active" id="tab-arch">⬡ Architecture</button>
+      <button class="ctx-tab" id="tab-system">◎ System</button>
       <!-- trace tab injected by JS when a trace result arrives -->
       <!-- arch toolbar, right-aligned, hidden when not on arch -->
     </div>
@@ -373,7 +652,31 @@
       <svg id="arch-svg"></svg>
     </div>
 
-    <!-- Code layers are injected dynamically by openCodeViewer -->
+    <!-- Layer: system architecture (logical components) -->
+    <div class="canvas-layer" id="layer-system">
+      <div id="system-toolbar">
+        <span id="system-status"></span>
+        <button class="arch-btn" id="system-regen-btn">Regenerate</button>
+      </div>
+      <svg id="system-svg">
+        <defs>
+          <marker id="system-arrow" viewBox="0 -5 10 10" refX="8" refY="0"
+                  markerWidth="8" markerHeight="8" orient="auto">
+            <path d="M0,-4L8,0L0,4" fill="rgba(255,255,255,0.3)"></path>
+          </marker>
+          <marker id="system-arrow-active" viewBox="0 -5 10 10" refX="8" refY="0"
+                  markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+            <path d="M0,-4L8,0L0,4" fill="#7dcfff"></path>
+          </marker>
+        </defs>
+      </svg>
+      <div id="system-overlay">
+        <div class="spin"></div>
+        <div id="system-overlay-text">Analyzing system architecture…</div>
+      </div>
+    </div>
+
+    <!-- Code viewer layers are injected dynamically by openCodeViewer (layer-code-*) -->
 
     <!-- Layer: trace -->
     <div class="canvas-layer" id="layer-trace">
@@ -452,7 +755,7 @@ const ARCH_TREE = {
 
 // ── Canvas layer / tab control ────────────────────────────────────────────────
 
-let currentLayer = "arch";
+let currentLayer = "arch"; // "arch" | "system" | "trace" | dynamic code-* layer ids
 
 function activateTab(name) {
   document.querySelectorAll(".ctx-tab").forEach(t => t.classList.remove("active"));
@@ -464,6 +767,12 @@ function activateTab(name) {
   currentLayer = name;
 
   document.getElementById("arch-toolbar").style.display = name === "arch" ? "flex" : "none";
+  const sysTb = document.getElementById("system-toolbar");
+  if (sysTb) sysTb.style.display = name === "system" ? "flex" : "none";
+
+  if (name === "system" && window.__systemDiagram && REPO_ID) {
+    window.__systemDiagram.load(REPO_ID);
+  }
 }
 
 function ensureTab(id, label, icon) {
@@ -495,6 +804,7 @@ function ensureTab(id, label, icon) {
 }
 
 document.getElementById("tab-arch").addEventListener("click", () => activateTab("arch"));
+document.getElementById("tab-system").addEventListener("click", () => activateTab("system"));
 
 // ── Code viewer ────────────────────────────────────────────────────────────────
 
@@ -676,30 +986,436 @@ function formatAnswer(text) {
   return html;
 }
 
+// ── Chat mode registry ────────────────────────────────────────────────────────
+// Each mode is a pluggable object implementing the contract below. Adding a new
+// mode (e.g. speech-to-speech) means adding one object and a toggle button —
+// no changes to the dispatcher, renderer, or input handlers.
+//
+// Contract:
+//   id          string
+//   label       string (display in toggle)
+//   placeholder string (input placeholder)
+//   async send(text, ctx) -> responseObj  — performs fetch, returns raw data
+//   render(responseObj, bubbleEl, ctx)    — builds DOM inside the assistant bubble
+
+async function qaSend(text) {
+  const res = await fetch(`${API}/query`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ repo_id: REPO_ID, question: text, scope: currentScope || null }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || "Query failed");
+  return data;
+}
+
+function qaRender(data, bubble) {
+  bubble.innerHTML = formatAnswer(data.answer || "");
+  const citations = (data.citations || []).map(c => ({ path: c.file_path, line: c.start_line }));
+  if (citations.length) {
+    const chips = document.createElement("div");
+    chips.className = "citations";
+    citations.forEach(c => {
+      const chip = document.createElement("span");
+      chip.className = "cite-chip";
+      chip.textContent = `${c.path}:${c.line}`;
+      chip.addEventListener("click", () => openCodeViewer(c.path, c.line));
+      chips.appendChild(chip);
+    });
+    bubble.appendChild(chips);
+  }
+}
+
+async function narrativeSend(text) {
+  const res = await fetch(`${API}/narrative/${encodeURIComponent(REPO_ID)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question: text }),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    const d = data.detail;
+    const msg = typeof d === "string" ? d : (d && d.message) ? d.message : "Narrative failed";
+    const err = new Error(msg);
+    if (d && d.raw) err.raw = d.raw;
+    throw err;
+  }
+  return data;
+}
+
+function narrativeRender(data, bubble) {
+  const steps = (data.steps || []).filter(s => s && (s.narration || "").trim().length > 0);
+  if (!steps.length) {
+    bubble.innerHTML = `<span style="color:var(--red)">No narrative steps returned.</span>`;
+    return;
+  }
+
+  const question = data.question || "";
+
+  bubble.innerHTML = "";
+  const player = document.createElement("div");
+  player.className = "narrative-player";
+  bubble.appendChild(player);
+
+  const stepEl = document.createElement("div");
+  stepEl.className = "narrative-step";
+  player.appendChild(stepEl);
+
+  const citationsEl = document.createElement("div");
+  citationsEl.className = "citations";
+  player.appendChild(citationsEl);
+
+  const controls = document.createElement("div");
+  controls.className = "narrative-controls";
+  const prevBtn = document.createElement("button");
+  prevBtn.className = "narrative-nav-btn"; prevBtn.textContent = "← Prev";
+  const nextBtn = document.createElement("button");
+  nextBtn.className = "narrative-nav-btn"; nextBtn.textContent = "Next →";
+  const replayBtn = document.createElement("button");
+  replayBtn.className = "narrative-nav-btn narrative-replay-btn";
+  replayBtn.innerHTML = `<span>↻</span><span>Replay</span>`;
+  const stopBtn = document.createElement("button");
+  stopBtn.className = "narrative-nav-btn narrative-stop-btn";
+  stopBtn.innerHTML = `<span>■</span><span>Stop</span>`;
+  const counter = document.createElement("span");
+  counter.className = "narrative-step-counter";
+  controls.append(prevBtn, nextBtn, replayBtn, stopBtn, counter);
+  player.appendChild(controls);
+
+  replayBtn.addEventListener("click", () => {
+    if (!window.__systemDiagram) return;
+    // Switch to System tab so the replay is visible, then re-run the step
+    if (currentLayer !== "system") activateTab("system");
+    window.__systemDiagram.setActiveStep(steps[idx]);
+  });
+
+  stopBtn.addEventListener("click", () => {
+    if (!window.__systemDiagram) return;
+    // Stop clears highlights, edge activation, and the parked particle.
+    window.__systemDiagram.clearStep();
+  });
+
+  // Row holding the "Zoom into X" button (only shown when a component is highlighted)
+  const zoomRow = document.createElement("div");
+  zoomRow.className = "narrative-zoom-row";
+  zoomRow.style.display = "none";
+  const zoomBtn = document.createElement("button");
+  zoomBtn.className = "narrative-zoom-btn";
+  zoomBtn.innerHTML = `<span class="zoom-glyph">⤢</span><span class="zoom-label">Zoom in</span>`;
+  zoomRow.appendChild(zoomBtn);
+  player.appendChild(zoomRow);
+
+  // Container for the zoom deep-dive panel (populated on demand)
+  const zoomPanel = document.createElement("div");
+  zoomPanel.style.display = "none";
+  player.appendChild(zoomPanel);
+
+  let idx = 0;
+  let zoomTargetId = null; // the component id the current step can zoom into
+  let zoomTargetLabel = null;
+  let isZoomOpen = false;  // true once zoomed in; stays true until the user zooms out
+
+  function applyZoomButtonState() {
+    if (isZoomOpen) {
+      zoomBtn.disabled = true;
+      zoomBtn.classList.add("is-zoomed");
+      zoomBtn.title = "Already zoomed in — use Zoom out to return";
+      zoomBtn.querySelector(".zoom-glyph").textContent = "✓";
+      zoomBtn.querySelector(".zoom-label").textContent =
+        `Zoomed into ${zoomTargetLabel || zoomTargetId || "component"}`;
+    } else {
+      zoomBtn.classList.remove("is-zoomed");
+      zoomBtn.title = "";
+      zoomBtn.querySelector(".zoom-glyph").textContent = "⤢";
+      // Label is set by updateZoomButton based on the active step's highlight.
+    }
+  }
+
+  function closeZoomPanel() {
+    zoomPanel.style.display = "none";
+    zoomPanel.innerHTML = "";
+    isZoomOpen = false;
+    if (window.__systemDiagram) {
+      window.__systemDiagram.resetZoom();
+      // Replay the main animation for the current step once we're zoomed back out
+      window.__systemDiagram.setActiveStep(steps[idx]);
+    }
+    zoomBtn.disabled = false;
+    updateZoomButton(steps[idx]);
+  }
+
+  async function openZoomPanel(componentId) {
+    zoomPanel.style.display = "block";
+    zoomPanel.innerHTML = `<div class="zoom-loading">Zooming into component…</div>`;
+    zoomBtn.disabled = true;
+
+    if (window.__systemDiagram) window.__systemDiagram.zoomToNode(componentId);
+
+    try {
+      const res = await fetch(`${API}/zoom/${encodeURIComponent(REPO_ID)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          component_id: componentId,
+          question,
+          narration: steps[idx]?.narration || "",
+        }),
+      });
+      const zd = await res.json();
+      if (!res.ok) {
+        const d = zd.detail;
+        const msg = typeof d === "string" ? d : (d && d.message) ? d.message : "Zoom failed";
+        zoomPanel.innerHTML = `<div class="zoom-error">${esc(msg)}</div>`;
+        isZoomOpen = false;
+        zoomBtn.disabled = false;
+        applyZoomButtonState();
+        return;
+      }
+      renderZoomDetail(zd);
+      isZoomOpen = true;
+      // Keep the label fresh in case the LLM returned a different resolved label
+      zoomTargetLabel = zd.component_label || zoomTargetLabel;
+      applyZoomButtonState();
+    } catch (err) {
+      zoomPanel.innerHTML = `<div class="zoom-error">${esc(String(err.message || err))}</div>`;
+      isZoomOpen = false;
+      zoomBtn.disabled = false;
+      applyZoomButtonState();
+    }
+  }
+
+  function renderZoomDetail(zd) {
+    zoomPanel.innerHTML = "";
+    const panel = document.createElement("div");
+    panel.className = "zoom-panel";
+
+    const header = document.createElement("div");
+    header.className = "zoom-panel-header";
+    const title = document.createElement("span");
+    title.className = "zoom-panel-title";
+    title.textContent = zd.component_label || zd.component_id || "Component";
+    const kind = document.createElement("span");
+    kind.className = "zoom-panel-kind";
+    kind.textContent = zd.component_kind || "";
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "zoom-panel-close";
+    closeBtn.innerHTML = `<span>⤡</span><span>Zoom out</span>`;
+    closeBtn.addEventListener("click", closeZoomPanel);
+    header.append(title, kind, closeBtn);
+    panel.appendChild(header);
+
+    const body = document.createElement("div");
+    body.className = "zoom-panel-body";
+    body.innerHTML = formatAnswer(zd.deep_dive || "");
+    panel.appendChild(body);
+
+    if ((zd.involved_files || []).length) {
+      const sec = document.createElement("div");
+      sec.className = "zoom-section";
+      const t = document.createElement("div");
+      t.className = "zoom-section-title"; t.textContent = "Files";
+      const row = document.createElement("div");
+      row.className = "zoom-chip-row";
+      zd.involved_files.forEach(f => {
+        const chip = document.createElement("span");
+        chip.className = "zoom-chip clickable";
+        const path = document.createElement("span");
+        path.textContent = `${f.file_path}:${f.start_line || 1}`;
+        chip.appendChild(path);
+        if (f.role) {
+          const r = document.createElement("span");
+          r.className = "zoom-chip-role";
+          r.textContent = "— " + f.role;
+          chip.appendChild(r);
+        }
+        chip.addEventListener("click", () => openCodeViewer(f.file_path, f.start_line || 1));
+        row.appendChild(chip);
+      });
+      sec.append(t, row);
+      panel.appendChild(sec);
+    }
+
+    if ((zd.tools || []).length) {
+      const sec = document.createElement("div");
+      sec.className = "zoom-section";
+      const t = document.createElement("div");
+      t.className = "zoom-section-title"; t.textContent = "Tools & libraries";
+      const row = document.createElement("div");
+      row.className = "zoom-chip-row";
+      zd.tools.forEach(tool => {
+        const chip = document.createElement("span");
+        chip.className = "zoom-chip tool";
+        chip.textContent = tool;
+        row.appendChild(chip);
+      });
+      sec.append(t, row);
+      panel.appendChild(sec);
+    }
+
+    if ((zd.citations || []).length) {
+      const sec = document.createElement("div");
+      sec.className = "zoom-section";
+      const t = document.createElement("div");
+      t.className = "zoom-section-title"; t.textContent = "Citations";
+      const row = document.createElement("div");
+      row.className = "zoom-chip-row";
+      zd.citations.forEach(c => {
+        const chip = document.createElement("span");
+        chip.className = "zoom-chip clickable";
+        chip.textContent = `${c.file_path}:${c.start_line || 1}`;
+        chip.addEventListener("click", () => openCodeViewer(c.file_path, c.start_line || 1));
+        row.appendChild(chip);
+      });
+      sec.append(t, row);
+      panel.appendChild(sec);
+    }
+
+    zoomPanel.appendChild(panel);
+  }
+
+  function updateZoomButton(step) {
+    const highlights = Array.isArray(step.highlight) ? step.highlight : [];
+    if (!highlights.length || !window.__systemDiagram) {
+      zoomRow.style.display = "none";
+      zoomTargetId = null;
+      zoomTargetLabel = null;
+      return;
+    }
+    // Pick the first highlighted component we can resolve. If the diagram
+    // hasn't loaded yet, fall back to the raw id so the label still renders.
+    let targetId = highlights[0];
+    let label = targetId;
+    for (const h of highlights) {
+      const comp = window.__systemDiagram.getComponent?.(h);
+      if (comp) {
+        targetId = comp.id;
+        label = comp.label || comp.id;
+        break;
+      }
+    }
+    zoomTargetId = targetId;
+    zoomTargetLabel = label;
+    zoomRow.style.display = "flex";
+    if (isZoomOpen) {
+      applyZoomButtonState();
+    } else {
+      zoomBtn.querySelector(".zoom-label").textContent = `Zoom into ${label}`;
+    }
+  }
+
+  zoomBtn.addEventListener("click", () => {
+    if (!zoomTargetId) return;
+    openZoomPanel(zoomTargetId);
+  });
+
+  function renderStep(i) {
+    // Close any open zoom panel when navigating between steps
+    if (zoomPanel.style.display !== "none") {
+      zoomPanel.style.display = "none";
+      zoomPanel.innerHTML = "";
+      if (window.__systemDiagram) window.__systemDiagram.resetZoom();
+    }
+    isZoomOpen = false;
+    zoomBtn.disabled = false;
+
+    idx = Math.max(0, Math.min(steps.length - 1, i));
+    const s = steps[idx];
+    stepEl.innerHTML = formatAnswer(s.narration || "");
+
+    citationsEl.innerHTML = "";
+    (s.citations || []).forEach(c => {
+      const chip = document.createElement("span");
+      chip.className = "cite-chip";
+      chip.textContent = `${c.file_path}:${c.start_line}`;
+      chip.addEventListener("click", () => openCodeViewer(c.file_path, c.start_line));
+      citationsEl.appendChild(chip);
+    });
+
+    counter.textContent = `Step ${idx + 1} / ${steps.length}`;
+    prevBtn.disabled = idx === 0;
+    nextBtn.disabled = idx === steps.length - 1;
+
+    // Auto-switch to System tab so the user can see the new action, and
+    // kick off the one-shot animation for this step.
+    if (currentLayer !== "system") activateTab("system");
+    if (window.__systemDiagram) window.__systemDiagram.setActiveStep(s);
+
+    updateZoomButton(s);
+    applyZoomButtonState();
+  }
+
+  prevBtn.addEventListener("click", () => renderStep(idx - 1));
+  nextBtn.addEventListener("click", () => renderStep(idx + 1));
+  renderStep(0);
+}
+
+const ChatModes = {
+  qa: {
+    id: "qa",
+    label: "Q&A",
+    placeholder: "Ask anything about this codebase…",
+    send: qaSend,
+    render: qaRender,
+  },
+  narrative: {
+    id: "narrative",
+    label: "Narrative",
+    placeholder: "Ask me to narrate a flow — e.g. how does a user's question reach the database?",
+    send: narrativeSend,
+    render: narrativeRender,
+  },
+  // future modes (speech-to-speech, debate, etc.) plug in here
+};
+
+let currentMode = ChatModes.qa;
+
+function setChatMode(modeId) {
+  const mode = ChatModes[modeId];
+  if (!mode) return;
+  currentMode = mode;
+  inputEl.placeholder = mode.placeholder;
+  document.querySelectorAll(".mode-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.mode === mode.id);
+  });
+}
+
+document.querySelectorAll(".mode-btn").forEach(btn => {
+  btn.addEventListener("click", () => setChatMode(btn.dataset.mode));
+});
+
 async function sendMessage() {
   const text = inputEl.value.trim();
   if (!text) return;
+  const mode = currentMode;
   inputEl.value = ""; inputEl.style.height = "auto";
   sendBtn.disabled = true;
   appendMsg("user", esc(text));
   showThinking();
+
+  // Build an empty assistant bubble upfront so mode.render can populate it
   try {
-    const res = await fetch(`${API}/query`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ repo_id: REPO_ID, question: text, scope: currentScope || null }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || "Query failed");
+    const data = await mode.send(text, { REPO_ID, API });
     removeThinking();
-    const response = {
-      type: "answer",
-      citations: (data.citations || []).map(c => ({ path: c.file_path, line: c.start_line })),
-    };
-    appendMsg("assistant", formatAnswer(data.answer), response);
+    const wrap = document.createElement("div");
+    wrap.className = "msg msg-assistant";
+    const label = document.createElement("span");
+    label.className = "msg-label"; label.textContent = "Nemotron";
+    wrap.appendChild(label);
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+    wrap.appendChild(bubble);
+    messagesEl.appendChild(wrap);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+    mode.render(data, bubble, { REPO_ID, API });
+    messagesEl.scrollTop = messagesEl.scrollHeight;
   } catch (err) {
     removeThinking();
-    appendMsg("assistant", `<span style="color:var(--red)">${esc(String(err.message || err))}</span>`, null);
+    let html = `<span style="color:var(--red)">${esc(String(err.message || err))}</span>`;
+    if (err.raw) {
+      html += `<details style="margin-top:8px"><summary style="cursor:pointer;color:var(--text-3);font-size:11px">Show raw response</summary>`
+           +  `<pre style="background:rgba(0,0,0,.25);color:var(--text-2);font-family:var(--font-code);font-size:11px;padding:8px;border-radius:4px;white-space:pre-wrap;margin-top:6px">${esc(err.raw)}</pre></details>`;
+    }
+    appendMsg("assistant", html, null);
   } finally {
     sendBtn.disabled = false;
   }
@@ -708,6 +1424,8 @@ async function sendMessage() {
 sendBtn.addEventListener("click", sendMessage);
 inputEl.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
 inputEl.addEventListener("input", () => { inputEl.style.height = "auto"; inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + "px"; });
+// Set initial placeholder from the default mode
+inputEl.placeholder = currentMode.placeholder;
 
 // Update topbar repo label immediately
 document.getElementById("topbar-repo").textContent = REPO_LABEL;
@@ -941,6 +1659,330 @@ function archSearch(query) {
 
 // Kick off the initial load
 if (REPO_ID) loadArchDiagram(REPO_ID);
+
+// ── System diagram (logical components) ───────────────────────────────────────
+
+(function initSystemDiagram() {
+  const KIND_COLOR = {
+    ui:       "#7aa2f7",  // blue
+    service:  "#bb9af7",  // purple
+    database: "#9ece6a",  // green
+    external: "#e0af68",  // yellow
+    queue:    "#7dcfff",  // cyan
+    worker:   "#f7768e",  // red
+    cache:    "#c0caf5",  // light
+  };
+
+  let _sysData = null;
+  let _sysLoaded = false;
+  let _sysLoading = false;
+  let _sysSim = null;
+  let _sysNodes = null;       // d3 selection of .system-node groups
+  let _sysEdges = null;       // d3 selection of .system-edge paths
+  let _sysSvg = null;
+  let _sysG = null;
+  let _sysZoom = null;
+  let _stepToken = 0;  // increments on every clearStep/setActiveStep so old animation loops exit
+
+  function showOverlay(text, isError, raw) {
+    const el = document.getElementById("system-overlay");
+    const txt = document.getElementById("system-overlay-text");
+    el.classList.toggle("error", !!isError);
+    el.classList.add("visible");
+    txt.innerHTML = "";
+    const msg = document.createElement("div");
+    msg.textContent = text;
+    txt.appendChild(msg);
+    if (raw) {
+      const pre = document.createElement("pre");
+      pre.textContent = raw;
+      txt.appendChild(pre);
+    }
+  }
+
+  function hideOverlay() {
+    document.getElementById("system-overlay").classList.remove("visible");
+  }
+
+  async function load(repoId, opts = {}) {
+    if (_sysLoaded && !opts.force) return;
+    if (_sysLoading) return;
+    _sysLoading = true;
+    showOverlay("Analyzing system architecture…", false);
+    try {
+      const url = opts.force
+        ? `${API}/system/${encodeURIComponent(repoId)}/regenerate`
+        : `${API}/system/${encodeURIComponent(repoId)}`;
+      const res = await fetch(url, { method: opts.force ? "POST" : "GET" });
+      const data = await res.json();
+      if (!res.ok) {
+        const d = data.detail;
+        const msg = typeof d === "string" ? d : (d && d.message) ? d.message : "Failed to load system diagram";
+        const raw = d && d.raw ? d.raw : null;
+        showOverlay(msg, true, raw);
+        return;
+      }
+      _sysData = data;
+      _sysLoaded = true;
+      _render();
+      hideOverlay();
+    } catch (err) {
+      showOverlay(String(err.message || err), true);
+    } finally {
+      _sysLoading = false;
+    }
+  }
+
+  function _render() {
+    const container = document.getElementById("layer-system");
+    const W = container.clientWidth  || 900;
+    const H = container.clientHeight || 620;
+
+    _sysSvg = d3.select("#system-svg").attr("viewBox", [0, 0, W, H]);
+    // Clear any previous render but keep the <defs> (arrow markers)
+    _sysSvg.selectAll("g.system-root").remove();
+
+    _sysG = _sysSvg.append("g").attr("class", "system-root");
+
+    _sysZoom = d3.zoom().scaleExtent([0.3, 3]).on("zoom", e => _sysG.attr("transform", e.transform));
+    _sysSvg.call(_sysZoom);
+
+    const components = (_sysData.components || []).map(c => ({...c}));
+    const edges = (_sysData.edges || []).map(e => ({
+      ...e, source: e.from, target: e.to,
+    }));
+
+    // Update toolbar status
+    document.getElementById("system-status").textContent =
+      `${components.length} components · ${edges.length} edges`;
+
+    // Seed positions using kind so layout is more readable. Spread nodes
+    // across more of the vertical space so we don't start with stacks of 2-3
+    // components on top of each other.
+    const LANES = { ui: 0.12, service: 0.5, cache: 0.6, queue: 0.65, worker: 0.55, database: 0.88, external: 0.88 };
+    const n = Math.max(components.length, 1);
+    components.forEach((c, i) => {
+      const laneX = (LANES[c.kind] ?? 0.5) * W;
+      c.x = laneX + (Math.random() - 0.5) * 60;
+      c.y = H * (0.12 + (i / n) * 0.76) + (Math.random() - 0.5) * 50;
+    });
+
+    // Force simulation — spacings tuned so the dormant graph breathes rather
+    // than clumping. Weaker lane pull + stronger repulsion + bigger collide
+    // radius = components don't sit on top of each other.
+    _sysSim = d3.forceSimulation(components)
+      .force("link", d3.forceLink(edges).id(d => d.id).distance(230).strength(0.35))
+      .force("charge", d3.forceManyBody().strength(-1400))
+      .force("collide", d3.forceCollide().radius(d => Math.max((d._w || 140) / 2, 60) + 24))
+      .force("x", d3.forceX(c => (LANES[c.kind] ?? 0.5) * W).strength(0.12))
+      .force("y", d3.forceY(H / 2).strength(0.03))
+      .alphaDecay(0.028);
+
+    // Edges layer — each edge is a group containing a wide invisible hit path,
+    // the visible arc, and its label. Grouping lets CSS show the label on
+    // :hover without needing JS mouse handlers per edge.
+    const edgeLayer = _sysG.append("g").attr("class", "system-edges");
+    const edgeGroups = edgeLayer.selectAll("g").data(edges).enter()
+      .append("g")
+      .attr("class", "system-edge-group")
+      .attr("data-edge-id", d => d.id);
+
+    const edgeHits = edgeGroups.append("path")
+      .attr("class", "system-edge-hit");
+
+    _sysEdges = edgeGroups.append("path")
+      .attr("class", "system-edge")
+      .attr("data-edge-id", d => d.id);
+
+    const edgeLabels = edgeGroups.append("text")
+      .attr("class", "system-edge-label")
+      .attr("data-edge-id", d => d.id)
+      .attr("text-anchor", "middle")
+      .text(d => d.label || "");
+
+    // Node layer
+    const nodeLayer = _sysG.append("g").attr("class", "system-nodes");
+    _sysNodes = nodeLayer.selectAll("g").data(components).enter()
+      .append("g")
+      .attr("class", "system-node")
+      .attr("data-id", d => d.id)
+      .style("cursor", "grab")
+      .call(d3.drag()
+        .on("start", (e, d) => { if (!e.active) _sysSim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+        .on("drag",  (e, d) => { d.fx = e.x; d.fy = e.y; })
+        .on("end",   (e, d) => { if (!e.active) _sysSim.alphaTarget(0); d.fx = null; d.fy = null; })
+      );
+
+    _sysNodes.append("rect")
+      .attr("rx", 8).attr("ry", 8)
+      .attr("fill", d => "rgba(36, 36, 58, 0.92)")
+      .attr("stroke", d => KIND_COLOR[d.kind] || "#6B7280")
+      .attr("stroke-width", 1.5);
+
+    _sysNodes.append("text")
+      .attr("class", "system-node-label")
+      .attr("fill", "#e4e4f0")
+      .attr("x", 0).attr("y", -2)
+      .attr("text-anchor", "middle")
+      .text(d => d.label || d.id);
+
+    _sysNodes.append("text")
+      .attr("class", "system-node-kind")
+      .attr("x", 0).attr("y", 14)
+      .attr("text-anchor", "middle")
+      .text(d => d.kind || "");
+
+    // Size each rect to fit its label
+    _sysNodes.each(function(d) {
+      const g = d3.select(this);
+      const labelNode = g.select(".system-node-label").node();
+      const bbox = labelNode.getBBox();
+      const w = Math.max(120, bbox.width + 28);
+      const h = 42;
+      g.select("rect")
+        .attr("x", -w / 2).attr("y", -h / 2)
+        .attr("width", w).attr("height", h);
+      d._w = w; d._h = h;
+    });
+
+    _sysSim.on("tick", () => {
+      const pathFor = d => {
+        const sx = d.source.x, sy = d.source.y, tx = d.target.x, ty = d.target.y;
+        const dx = tx - sx, dy = ty - sy;
+        const dr = Math.sqrt(dx * dx + dy * dy) * 1.4 || 1;
+        return `M${sx},${sy}A${dr},${dr} 0 0,1 ${tx},${ty}`;
+      };
+      _sysEdges.attr("d", pathFor);
+      edgeHits.attr("d", pathFor);
+      edgeLabels
+        .attr("x", d => (d.source.x + d.target.x) / 2)
+        .attr("y", d => (d.source.y + d.target.y) / 2 - 4);
+      _sysNodes.attr("transform", d => `translate(${d.x},${d.y})`);
+    });
+  }
+
+  function clearStep() {
+    _stepToken++;
+    if (!_sysSvg) return;
+    _sysSvg.selectAll(".system-node").classed("active", false);
+    _sysSvg.selectAll(".system-edge")
+      .classed("active", false)
+      .attr("marker-end", "url(#system-arrow)")
+      .attr("marker-start", null);
+    _sysSvg.selectAll(".system-edge-label").classed("active", false);
+    _sysSvg.selectAll(".system-particle, .system-particle-label").remove();
+  }
+
+  function setActiveStep(step) {
+    if (!_sysSvg || !step) return;
+    clearStep();
+    const myToken = ++_stepToken;
+
+    // Highlight components
+    const highlight = new Set(step.highlight || []);
+    _sysSvg.selectAll(".system-node")
+      .classed("active", d => highlight.has(d.id));
+
+    // Animate data flow along the named edge
+    const anim = step.animate;
+    if (!anim || !anim.edge) return;
+
+    const edgePath = _sysSvg.select(`path.system-edge[data-edge-id="${anim.edge}"]`);
+    if (edgePath.empty()) return;
+
+    const reversed = anim.direction === "reverse";
+    edgePath.classed("active", true)
+      .attr("marker-end",   reversed ? null : "url(#system-arrow-active)")
+      .attr("marker-start", reversed ? "url(#system-arrow-active)" : null);
+    // Reveal the label for the active edge (stays visible until clearStep)
+    _sysSvg.select(`.system-edge-label[data-edge-id="${anim.edge}"]`).classed("active", true);
+
+    const pathNode = edgePath.node();
+
+    const particle = _sysG.append("circle")
+      .attr("class", "system-particle")
+      .attr("r", 5);
+
+    let labelEl = null;
+    if (anim.label) {
+      labelEl = _sysG.append("text")
+        .attr("class", "system-particle-label")
+        .attr("text-anchor", "middle")
+        .attr("dy", -10)
+        .text(anim.label);
+    }
+
+    const duration = 1400;
+    const started = performance.now();
+
+    function frame(now) {
+      // Exit if a newer step replaced us, or the particle was removed
+      if (myToken !== _stepToken) return;
+      if (!particle.node() || !particle.node().parentNode) return;
+
+      const cycle = now - started;
+      const totalLen = pathNode.getTotalLength();
+      if (cycle < duration) {
+        const t = cycle / duration;
+        const tt = reversed ? 1 - t : t;
+        const pt = pathNode.getPointAtLength(totalLen * tt);
+        particle.attr("cx", pt.x).attr("cy", pt.y);
+        if (labelEl) labelEl.attr("x", pt.x).attr("y", pt.y);
+        requestAnimationFrame(frame);
+      } else {
+        // One-shot animation ends — remove particle + trail label so the diagram is clean.
+        particle.remove();
+        if (labelEl) labelEl.remove();
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+
+  function zoomToNode(nodeId, opts = {}) {
+    if (!_sysSvg || !_sysZoom) return;
+    const sel = _sysSvg.select(`.system-node[data-id="${nodeId}"]`);
+    if (sel.empty()) return;
+    const d = sel.datum();
+    if (!d || d.x == null || d.y == null) return;
+
+    const container = document.getElementById("layer-system");
+    const W = container.clientWidth  || 900;
+    const H = container.clientHeight || 620;
+    const scale = opts.scale || 1.8;
+    // Center the node in the viewport at the requested scale.
+    const tx = W / 2 - d.x * scale;
+    const ty = H / 2 - d.y * scale;
+    _sysSvg.transition().duration(600)
+      .call(_sysZoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+  }
+
+  function resetZoom() {
+    if (!_sysSvg || !_sysZoom) return;
+    _sysSvg.transition().duration(500)
+      .call(_sysZoom.transform, d3.zoomIdentity);
+  }
+
+  function getComponent(nodeId) {
+    if (!_sysData) return null;
+    return (_sysData.components || []).find(c => c.id === nodeId) || null;
+  }
+
+  window.__systemDiagram = {
+    load,
+    setActiveStep,
+    clearStep,
+    zoomToNode,
+    resetZoom,
+    getComponent,
+    isLoaded: () => _sysLoaded,
+    reload: (repoId) => { _sysLoaded = false; _sysData = null; load(repoId, { force: true }); },
+  };
+
+  // "Regenerate" button bypasses the cache
+  document.getElementById("system-regen-btn")?.addEventListener("click", () => {
+    if (REPO_ID) window.__systemDiagram.reload(REPO_ID);
+  });
+})();
 
 // ── Resizable divider ──────────────────────────────────────────────────────────
 
