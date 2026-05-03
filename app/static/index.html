@@ -2,11 +2,30 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Nemotron Code RAG</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <p>UI pending (FE-01+).</p>
+  <div id="app">
+    <section id="index-section">
+      <h1>Nemotron Code RAG</h1>
+      <div id="repo-form">
+        <input type="url" id="repo-url" placeholder="https://github.com/owner/repo"
+               required pattern="https://(github|gitlab)\.com/.*">
+        <button id="index-btn" onclick="startIndexing()">Index repo</button>
+      </div>
+      <div id="index-status" hidden>
+        <span id="status-text">Cloning and indexing...</span>
+        <span class="spinner"></span>
+      </div>
+      <div id="index-error" hidden></div>
+    </section>
+
+    <section id="main-section" hidden>
+      <!-- FE-02 (file tree) injects here. FE-03+ inject as backends land. -->
+    </section>
+  </div>
   <script src="app.js"></script>
 </body>
 </html>
