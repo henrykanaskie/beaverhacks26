@@ -1,4 +1,4 @@
-# AccliMate ![:)](app/static/logo.png)
+# AccliMate
 
 **Codebase onboarding assistant** — paste a GitHub URL, get an interactive RAG-powered guide to any repository.
 
