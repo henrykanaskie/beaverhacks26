@@ -10,7 +10,6 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from llama_index.core import Document
 from llama_index.core.node_parser import CodeSplitter
-from llama_index.embeddings.nomic import NomicEmbedding
 from pydantic import BaseModel
 
 from constants import EXCLUDE_DIRS, INCLUDE_EXTENSIONS, LANGUAGE_MAP
@@ -60,14 +59,14 @@ def clone_repo(repo_url: str, repo_id: str) -> str:
     Always call cleanup_clone(repo_id) in a finally block after calling this.
     """
     clone_path = f"clones/{repo_id}"
-    timeout = int(os.getenv("CLONE_TIMEOUT_SECONDS", "60"))
+    timeout = int(os.getenv("CLONE_TIMEOUT_SECONDS", "600"))
 
     if os.path.exists(clone_path):
         _rmtree(clone_path)
 
     # GIT_TERMINAL_PROMPT=0 ensures private repos fail fast on auth instead of
     # blocking on a credential prompt until the timeout fires.
-    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "GIT_LFS_SKIP_SMUDGE": "1"}
 
     try:
         result = subprocess.run(
@@ -207,19 +206,48 @@ def _chunk_id(repo_id: str, chunk: dict) -> str:
     return f"{repo_id}_{chunk['file_path']}_{chunk['start_line']}_{suffix}"
 
 
-def embed_and_store(chunks: list[dict], repo_id: str) -> int:
-    """Embed chunks in batches via Nomic and write to the repo's Chroma collection.
+def _get_embed_model():
+    """Return the code embedding model (Salesforce CodeT5+, runs locally).
 
-    Uses nomic-embed-code-v1 with task_type=search_document. Returns total stored.
+    Falls back to all-MiniLM-L6-v2 if CodeT5+ fails to load.
     """
+    from transformers import AutoModel, AutoTokenizer
+    import torch
+
+    try:
+        _tokenizer = AutoTokenizer.from_pretrained("Salesforce/codet5p-110m-embedding", trust_remote_code=True)
+        _model = AutoModel.from_pretrained("Salesforce/codet5p-110m-embedding", trust_remote_code=True)
+        _model.eval()
+
+        class _CodeT5Adapter:
+            def get_text_embedding_batch(self, texts: list[str]) -> list[list[float]]:
+                inputs = _tokenizer(texts, padding=True, truncation=True, max_length=512, return_tensors="pt")
+                with torch.no_grad():
+                    outputs = _model(**inputs)
+                return outputs.tolist()
+
+        print("Embed: using Salesforce/codet5p-110m-embedding")
+        return _CodeT5Adapter(), "codet5p"
+    except Exception as e:
+        print(f"Warning: CodeT5+ failed to load ({e!r}), falling back to all-MiniLM-L6-v2")
+
+    from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
+    _st_fn = SentenceTransformerEmbeddingFunction(model_name="all-MiniLM-L6-v2")
+
+    class _FallbackAdapter:
+        def get_text_embedding_batch(self, texts: list[str]) -> list[list[float]]:
+            return _st_fn(texts)
+
+    print("Embed: using fallback all-MiniLM-L6-v2")
+    return _FallbackAdapter(), "local"
+
+
+def embed_and_store(chunks: list[dict], repo_id: str) -> int:
+    """Embed chunks in batches and write to the repo's Chroma collection. Returns total stored."""
     if not chunks:
         return 0
 
-    embed_model = NomicEmbedding(
-        api_key=os.getenv("NOMIC_API_KEY"),
-        model_name="nomic-embed-code-v1",
-        task_type="search_document",
-    )
+    embed_model, provider = _get_embed_model()
     collection = get_or_create_collection(repo_id)
     total_stored = 0
 
@@ -228,14 +256,23 @@ def embed_and_store(chunks: list[dict], repo_id: str) -> int:
         texts = [c["text"] for c in batch]
 
         embeddings = None
-        for attempt in range(3):
+        max_attempts = 6 if provider == "nomic" else 2
+        for attempt in range(max_attempts):
             try:
                 embeddings = embed_model.get_text_embedding_batch(texts)
                 break
-            except Exception:
-                if attempt == 2:
+            except Exception as e:
+                if attempt == max_attempts - 1:
                     raise
-                time.sleep(2 ** attempt)
+                wait = min(90.0, 3.0 * (2 ** attempt))
+                err_s = str(e).lower()
+                if "503" in err_s or "429" in err_s or "retry" in err_s:
+                    wait = min(120.0, wait * 1.5)
+                print(
+                    f"Warning: embed batch retry {attempt + 1}/{max_attempts} "
+                    f"after {e!r}; sleeping {wait:.0f}s"
+                )
+                time.sleep(wait)
 
         ids = [_chunk_id(repo_id, c) for c in batch]
         metadatas = [{
@@ -262,10 +299,20 @@ async def index_repo(request: IndexRequest):
     validate_url(request.repo_url)
     repo_id = get_repo_id(request.repo_url)
 
-    # Already indexed — return immediately without re-processing
+    # Already indexed — return immediately unless collection is empty (failed/interrupted run).
     if collection_exists(repo_id):
         collection = get_or_create_collection(repo_id)
-        return {"repo_id": repo_id, "status": "already_indexed", "chunk_count": collection.count()}
+        n = collection.count()
+        if n > 0:
+            return {
+                "repo_id": repo_id,
+                "status": "already_indexed",
+                "chunk_count": n,
+            }
+        try:
+            get_client().delete_collection(repo_id)
+        except Exception:
+            pass
 
     clone_path: str | None = None
     try:
