@@ -43,7 +43,21 @@
       border-bottom: 1px solid var(--border);
       display: flex; align-items: center; padding: 0 16px; gap: 10px; flex-shrink: 0;
     }
-    .logo { font-size: 13px; font-weight: 600; color: var(--purple); letter-spacing: .02em; }
+    .logo {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 13px; font-weight: 600; color: var(--purple); letter-spacing: .02em;
+    }
+    .logo-img { mix-blend-mode: normal; }
+    .logo-link {
+      text-decoration: none;
+      color: inherit;
+      border-radius: 4px;
+    }
+    .logo-link:hover { opacity: 0.92; }
+    .logo-link:focus-visible {
+      outline: 2px solid var(--blue);
+      outline-offset: 2px;
+    }
     .repo { font-family: var(--font-code); font-size: 12px; color: var(--text-2); }
     .sep  { color: var(--text-3); }
     .demo-pill {
@@ -598,7 +612,10 @@
 <body>
 
 <div id="topbar">
-  <span class="logo"><img src="/logo.png" alt="AccliMate" style="height:20px;vertical-align:middle;margin-right:6px">AccliMate</span>
+  <a href="index.html" class="logo logo-link" aria-label="Home — AccliMate">
+    <img src="/logo.png" alt="" class="logo-img" style="height:40px;vertical-align:middle;margin-right:6px">
+    AccliMate
+  </a>
   <span class="sep">/</span>
   <span class="repo" id="topbar-repo">loading…</span>
   <span class="indexed-badge" id="topbar-indexed"></span>

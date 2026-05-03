@@ -192,7 +192,9 @@ function escapeHtml(str) {
 
 // ---------- Recent projects ----------
 
-function deriveProjectName(url) {
+function deriveProjectName(url, repoId = "", displayName = "") {
+  if (displayName) return displayName;
+  if (!url) return "Unlabeled indexed repo";
   try { return new URL(url).pathname.replace(/^\/+|\.git$/g, ""); }
   catch { return url; }
 }
@@ -226,7 +228,7 @@ async function loadRecentProjects() {
       const href = `view.html?repo_id=${encodeURIComponent(p.repo_id)}&url=${encodeURIComponent(p.repo_url)}`;
       li.innerHTML =
         `<a href="${href}">` +
-          `<span class="name">${escapeHtml(deriveProjectName(p.repo_url))}</span>` +
+          `<span class="name">${escapeHtml(deriveProjectName(p.repo_url, p.repo_id, p.display_name))}</span>` +
           `<span class="rel">${escapeHtml(relTime(p.indexed_at))}</span>` +
         `</a>`;
       ul.appendChild(li);
