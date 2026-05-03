@@ -226,14 +226,41 @@
     #arch-toolbar {
       position: absolute; top: 10px; right: 12px;
       display: flex; gap: 6px; z-index: 5;
+      align-items: center; flex-wrap: wrap;
+      background: rgba(22,22,30,.75); padding: 6px 10px;
+      border: 1px solid var(--border); border-radius: 6px;
+      backdrop-filter: blur(6px);
     }
+    #arch-counts {
+      font-family: var(--font-code); font-size: 11px; color: var(--text-2);
+      padding-right: 4px;
+    }
+    #arch-search {
+      width: 200px; font-family: var(--font-ui); font-size: 12px;
+      background: var(--bg-active); border: 1px solid var(--border-md);
+      border-radius: 4px; color: var(--text-1); padding: 4px 8px; outline: none;
+      transition: border-color .15s;
+    }
+    #arch-search:focus { border-color: rgba(122,162,247,.5); }
+    #arch-search::placeholder { color: var(--text-3); }
     .arch-btn {
       background: var(--bg-raised); border: 1px solid var(--border-md);
       color: var(--text-2); font-size: 11px; font-family: var(--font-ui);
       padding: 4px 10px; border-radius: 4px; cursor: pointer; transition: background .12s;
     }
     .arch-btn:hover { background: var(--bg-hover); color: var(--text-1); }
-    #arch-svg { width: 100%; height: 100%; display: block; }
+    #arch-svg { width: 100%; height: 100%; display: block; cursor: grab; }
+    #arch-svg:active { cursor: grabbing; }
+
+    .arch-link { fill: none; stroke: rgba(255,255,255,0.08); stroke-width: 1; }
+    .arch-node text {
+      font-size: 11px; font-family: var(--font-code);
+      user-select: none; pointer-events: none;
+    }
+    .arch-node-folder text { fill: var(--text-1); }
+    .arch-node-file   text { fill: var(--text-2); }
+    .arch-node-match  text { fill: var(--red) !important; font-weight: 600; }
+    .arch-node-match circle { stroke: var(--red) !important; stroke-width: 2 !important; }
 
     /* ── Code viewer ── */
     #layer-code { background: var(--bg-main); }
@@ -355,6 +382,9 @@
     <!-- Layer: architecture (default) -->
     <div class="canvas-layer active" id="layer-arch">
       <div id="arch-toolbar">
+        <span id="arch-counts"></span>
+        <input type="text" id="arch-search" placeholder="Search files and folders…"
+               oninput="archSearch(this.value)">
         <button class="arch-btn" onclick="archExpandAll()">Expand all</button>
         <button class="arch-btn" onclick="archCollapseAll()">Collapse all</button>
         <button class="arch-btn" onclick="resetArchZoom()">Reset zoom</button>
@@ -706,122 +736,218 @@ document.getElementById("topbar-repo").textContent = REPO_LABEL;
   }
 })();
 
-// ── Architecture D3 ────────────────────────────────────────────────────────────
+// ── Architecture D3 (ARCH-02) ─────────────────────────────────────────────────
 
-function _buildArchTree(files, repoLabel) {
-  const root = { id: "/", name: repoLabel || "repo", type: "folder", children: [] };
-  const map = { "/": root };
-  const langMap = { py:"python", js:"javascript", ts:"typescript", tsx:"tsx", jsx:"javascript",
-    go:"go", rs:"rust", java:"java", cpp:"cpp", cs:"c_sharp" };
-  files.sort().forEach(filePath => {
-    const parts = filePath.split("/");
-    let parentId = "/";
-    parts.forEach((part, i) => {
-      const isLeaf = i === parts.length - 1;
-      const nodeId = parentId === "/" ? part : parentId + "/" + part;
-      if (!map[nodeId]) {
-        const ext = part.split(".").pop();
-        const node = {
-          id: nodeId, name: part,
-          type: isLeaf ? "file" : "folder",
-          language: isLeaf ? (langMap[ext] || "unknown") : undefined,
-          children: isLeaf ? undefined : [],
-        };
-        map[nodeId] = node;
-        (map[parentId].children = map[parentId].children || []).push(node);
-      }
-      parentId = nodeId;
-    });
-  });
-  return root;
-}
+const LANGUAGE_COLORS = {
+  python:     "#4B8BBE",
+  javascript: "#F7DF1E",
+  typescript: "#3178C6",
+  tsx:        "#61DAFB",
+  go:         "#00ADD8",
+  rust:       "#CE422B",
+  java:       "#B07219",
+  cpp:        "#F34B7D",
+  c_sharp:    "#178600",
+  unknown:    "#888888",
+};
 
-function initArch(treeData) {
-  const container = document.getElementById("layer-arch");
-  const W = container.clientWidth || 800;
-  const H = container.clientHeight || 600;
-  const svg = d3.select("#arch-svg");
-  svg.selectAll("*").remove();
-  const g = svg.append("g");
+let _archRoot = null;
+let _archSvgSel = null;
+let _archZoom = null;
+let _archData = null;
+let _archRendered = false;
+const ARCH_NODE_WIDTH = 220;
+const ARCH_NODE_HEIGHT = 22;
 
-  const zoom = d3.zoom().scaleExtent([0.15, 4]).on("zoom", e => g.attr("transform", e.transform));
-  svg.call(zoom);
+// The code viewer alias — the spec uses window.__openCodeViewer
+window.__openCodeViewer = (filePath, startLine) => openCodeViewer(filePath, startLine);
 
-  const resetView = () =>
-    svg.transition().duration(350).call(zoom.transform, d3.zoomIdentity.translate(W * 0.1, H / 2).scale(0.88));
-
-  const root = d3.hierarchy(treeData);
-  root.x0 = H / 2; root.y0 = 0;
-  root.descendants().forEach(d => {
-    if (d.depth >= 2 && d.children) { d._children = d.children; d.children = null; }
-  });
-
-  const tree = d3.tree().nodeSize([20, 190]);
-  const LANG_COLOR = { python:"#4B8BBE", javascript:"#F7DF1E", typescript:"#3178C6",
-    tsx:"#3178C6", go:"#00ADD8", rust:"#CE422B", java:"#ED8B00", cpp:"#659AD2", unknown:"#6B7280" };
-
-  function update(src) {
-    tree(root);
-    const nodes = root.descendants(), links = root.links();
-
-    const link = g.selectAll(".al").data(links, d => d.target.data.id);
-    link.enter().append("path").attr("class","al")
-      .attr("fill","none").attr("stroke","rgba(255,255,255,0.07)").attr("stroke-width",1)
-      .merge(link).transition().duration(220)
-      .attr("d", d3.linkHorizontal().x(d => d.y).y(d => d.x));
-    link.exit().remove();
-
-    const node = g.selectAll(".an").data(nodes, d => d.data.id);
-    const enter = node.enter().append("g").attr("class","an")
-      .attr("transform", `translate(${src.y0},${src.x0})`).style("cursor","pointer")
-      .on("click", (_, d) => {
-        if (d.data.type === "file") { openCodeViewer(d.data.id, 1); return; }
-        if (d.children) { d._children = d.children; d.children = null; }
-        else { d.children = d._children; d._children = null; }
-        update(d);
-      });
-    enter.append("circle").attr("r",5).attr("stroke","rgba(255,255,255,0.1)").attr("stroke-width",1);
-    enter.append("text").attr("dy","0.32em").attr("font-family","var(--font-code)").attr("font-size","11px").attr("fill","var(--text-2)");
-
-    const m = enter.merge(node);
-    m.transition().duration(220).attr("transform", d => `translate(${d.y},${d.x})`);
-    m.select("circle").attr("fill", d =>
-      d.data.type === "folder" ? (d.children ? "#6B7280" : "#374151") : (LANG_COLOR[d.data.language] || LANG_COLOR.unknown)
-    );
-    m.select("text")
-      .attr("x", d => (d.children || d._children) ? -9 : 9)
-      .attr("text-anchor", d => (d.children || d._children) ? "end" : "start")
-      .text(d => d.data.name);
-
-    node.exit().transition().duration(220).attr("transform", `translate(${src.y},${src.x})`).remove();
-    nodes.forEach(d => { d.x0 = d.x; d.y0 = d.y; });
-  }
-
-  update(root);
-  resetView();
-
-  window.archExpandAll = () => {
-    root.descendants().forEach(d => { if (d._children) { d.children = d._children; d._children = null; } });
-    update(root);
-  };
-  window.archCollapseAll = () => {
-    root.descendants().forEach(d => { if (d.depth > 0 && d.children) { d._children = d.children; d.children = null; } });
-    update(root);
-  };
-  window.resetArchZoom = resetView;
-}
-
-// Start with an empty placeholder, then load real file tree
-initArch({ id: "/", name: REPO_LABEL, type: "folder", children: [] });
-(async () => {
+async function loadArchDiagram(repoId) {
+  if (_archData) { _renderArch(); return; }
   try {
-    const res = await fetch(`${API}/files/${encodeURIComponent(REPO_ID)}`);
-    if (res.ok) {
-      const data = await res.json();
-      initArch(_buildArchTree(data.files, REPO_LABEL));
+    const res = await fetch(`${API}/architecture/${encodeURIComponent(repoId)}`);
+    if (!res.ok) throw new Error("Architecture data unavailable");
+    _archData = await res.json();
+    const counts = document.getElementById("arch-counts");
+    if (counts) counts.textContent =
+      `${_archData.total_files} files · ${_archData.total_folders} folders`;
+    _renderArch();
+  } catch (err) {
+    console.error("Architecture diagram:", err.message);
+  }
+}
+
+function _renderArch() {
+  _archRendered = true;
+  const container = document.getElementById("layer-arch");
+  const W = container.clientWidth  || 900;
+  const H = container.clientHeight || 620;
+
+  _archSvgSel = d3.select("#arch-svg").attr("viewBox", [0, 0, W, H]);
+  _archSvgSel.selectAll("*").remove();
+
+  const g = _archSvgSel.append("g").attr("transform", `translate(60, ${H / 2})`);
+  _archSvgSel._g = g;
+
+  _archZoom = d3.zoom().scaleExtent([0.05, 3]).on("zoom", e => g.attr("transform", e.transform));
+  _archSvgSel.call(_archZoom);
+  _archSvgSel.call(_archZoom.transform, d3.zoomIdentity.translate(60, H / 2));
+
+  _archRoot = d3.hierarchy(_archData.tree, d => d.children);
+  _archRoot.x0 = 0;
+  _archRoot.y0 = 0;
+
+  // Collapse all folders except root so large repos stay readable
+  _archRoot.descendants().forEach(d => {
+    if (d.depth > 0 && d.data.type === "folder" && d.children) {
+      d._children = d.children;
+      d.children = null;
     }
-  } catch (_) { /* arch stays empty — not critical */ }
-})();
+  });
+
+  _archUpdate(_archRoot, g);
+}
+
+function _archUpdate(source, g) {
+  const treeLayout = d3.tree().nodeSize([ARCH_NODE_HEIGHT + 4, ARCH_NODE_WIDTH]);
+  treeLayout(_archRoot);
+
+  const nodes = _archRoot.descendants();
+  const links = _archRoot.links();
+  const duration = 300;
+
+  // Links
+  const link = g.selectAll(".arch-link").data(links, d => d.target.data.id);
+
+  link.join(
+    enter => enter.append("path").attr("class", "arch-link")
+      .attr("d", () => {
+        const o = { x: source.x0 || 0, y: source.y0 || 0 };
+        return _archLinkPath({ source: o, target: o });
+      }),
+    update => update,
+    exit => exit.transition().duration(duration)
+      .attr("d", () => {
+        const o = { x: source.x, y: source.y };
+        return _archLinkPath({ source: o, target: o });
+      }).remove()
+  ).transition().duration(duration).attr("d", _archLinkPath);
+
+  // Nodes
+  const node = g.selectAll(".arch-node").data(nodes, d => d.data.id);
+
+  const nodeEnter = node.enter().append("g")
+    .attr("class", d => `arch-node arch-node-${d.data.type}`)
+    .attr("transform", () => `translate(${source.y0 || 0},${source.x0 || 0})`)
+    .style("opacity", 0)
+    .on("click", (e, d) => {
+      if (d.data.type === "folder") {
+        _archToggle(d);
+        _archUpdate(d, g);
+      } else {
+        window.__openCodeViewer(d.data.id, 1);
+      }
+    });
+
+  nodeEnter.append("circle")
+    .attr("r", d => d.data.type === "folder" ? 8 : 5)
+    .attr("fill", d => {
+      if (d.data.type === "folder") return d._children ? "#374151" : "#6B7280";
+      return LANGUAGE_COLORS[d.data.language] || LANGUAGE_COLORS.unknown;
+    })
+    .attr("stroke", "#1e1e2e")
+    .attr("stroke-width", 1.5)
+    .attr("cursor", "pointer");
+
+  nodeEnter.append("text")
+    .attr("x", d => d.data.type === "folder" ? 14 : 10)
+    .attr("dy", "0.35em")
+    .attr("cursor", "pointer")
+    .text(d => {
+      const n = d.data.name;
+      return n.length > 28 ? n.slice(0, 25) + "…" : n;
+    });
+
+  nodeEnter.filter(d => d.data.type === "folder").append("text")
+    .attr("class", "arch-expand-icon")
+    .attr("x", -14).attr("dy", "0.35em")
+    .attr("fill", "#6B7280").attr("font-size", "10px")
+    .text(d => d._children ? "▶" : d.children ? "▼" : "");
+
+  const nodeUpdate = nodeEnter.merge(node);
+  nodeUpdate.transition().duration(duration)
+    .attr("transform", d => `translate(${d.y},${d.x})`)
+    .style("opacity", 1);
+
+  nodeUpdate.select("circle")
+    .attr("fill", d => {
+      if (d.data.type === "folder") return d._children ? "#374151" : "#6B7280";
+      return LANGUAGE_COLORS[d.data.language] || LANGUAGE_COLORS.unknown;
+    });
+  nodeUpdate.select(".arch-expand-icon")
+    .text(d => d._children ? "▶" : d.children ? "▼" : "");
+
+  node.exit().transition().duration(duration)
+    .attr("transform", () => `translate(${source.y},${source.x})`)
+    .style("opacity", 0).remove();
+
+  nodes.forEach(d => { d.x0 = d.x; d.y0 = d.y; });
+}
+
+function _archLinkPath(d) {
+  return `M ${d.target.y} ${d.target.x}
+          C ${(d.target.y + d.source.y) / 2} ${d.target.x},
+            ${(d.target.y + d.source.y) / 2} ${d.source.x},
+            ${d.source.y} ${d.source.x}`;
+}
+
+function _archToggle(d) {
+  if (d.children) {
+    d._children = d.children;
+    d.children = null;
+  } else {
+    d.children = d._children;
+    d._children = null;
+  }
+}
+
+function archExpandAll() {
+  if (!_archRoot || !_archSvgSel) return;
+  _archRoot.descendants().forEach(d => {
+    if (d._children) { d.children = d._children; d._children = null; }
+  });
+  _archUpdate(_archRoot, _archSvgSel._g);
+}
+
+function archCollapseAll() {
+  if (!_archRoot || !_archSvgSel) return;
+  _archRoot.descendants().forEach(d => {
+    if (d.depth > 0 && d.children) { d._children = d.children; d.children = null; }
+  });
+  _archUpdate(_archRoot, _archSvgSel._g);
+}
+
+function resetArchZoom() {
+  if (_archZoom && _archSvgSel) {
+    const H = document.getElementById("layer-arch").clientHeight || 620;
+    _archSvgSel.transition().duration(300)
+      .call(_archZoom.transform, d3.zoomIdentity.translate(60, H / 2));
+  }
+}
+
+function archSearch(query) {
+  if (!_archRoot || !_archSvgSel) return;
+  const q = query.toLowerCase().trim();
+  if (q) archExpandAll();
+  _archSvgSel.selectAll(".arch-node")
+    .classed("arch-node-match", d => q.length > 0 && d.data.name.toLowerCase().includes(q));
+  if (!q) {
+    _archSvgSel.selectAll(".arch-node").classed("arch-node-match", false);
+  }
+}
+
+// Kick off the initial load
+if (REPO_ID) loadArchDiagram(REPO_ID);
 
 // ── Resizable divider ──────────────────────────────────────────────────────────
 
