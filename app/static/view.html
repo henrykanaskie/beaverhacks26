@@ -1529,11 +1529,23 @@ function initArch(treeData) {
   const zoom = d3.zoom().scaleExtent([0.15, 4]).on("zoom", e => g.attr("transform", e.transform));
   svg.call(zoom);
 
-  const resetView = () =>
-    svg.transition().duration(350).call(zoom.transform, d3.zoomIdentity.translate(W * 0.1, H / 2).scale(0.88));
+  // Fit the current visible tree to the viewport with padding
+  function fitView(duration = 350) {
+    requestAnimationFrame(() => {
+      const bbox = g.node().getBBox();
+      if (!bbox.width || !bbox.height) return;
+      const pad = 48;
+      const scale = Math.min(1, (W - pad * 2) / bbox.width, (H - pad * 2) / bbox.height);
+      const tx = (W - bbox.width * scale) / 2 - bbox.x * scale;
+      const ty = (H - bbox.height * scale) / 2 - bbox.y * scale;
+      svg.transition().duration(duration)
+        .call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+    });
+  }
 
   const root = d3.hierarchy(treeData);
   root.x0 = H / 2; root.y0 = 0;
+  // Collapse depth ≥ 2 on load — keep top-level folders visible
   root.descendants().forEach(d => {
     if (d.depth >= 2 && d.children) { d._children = d.children; d.children = null; }
   });
@@ -1578,26 +1590,49 @@ function initArch(treeData) {
     m.select("text")
       .attr("x", d => (d.children || d._children) ? -9 : 9)
       .attr("text-anchor", d => (d.children || d._children) ? "end" : "start")
-      .text(d => d.data.name)
-      .attr("fill", d => (q && d.data.name.toLowerCase().includes(q)) ? "var(--cyan)" : "var(--text-2)")
-      .attr("font-weight", d => (q && d.data.name.toLowerCase().includes(q)) ? "600" : "normal");
+      .attr("fill", "var(--text-2)")
+      .attr("font-weight", "normal")
+      .each(function(d) {
+        const el = d3.select(this);
+        el.selectAll("tspan").remove();
+        const name = d.data.name;
+        const idx = q ? name.toLowerCase().indexOf(q) : -1;
+        if (idx >= 0) {
+          if (idx > 0) el.append("tspan").text(name.slice(0, idx));
+          el.append("tspan").attr("fill", "var(--cyan)").attr("font-weight", "600")
+            .text(name.slice(idx, idx + q.length));
+          if (idx + q.length < name.length)
+            el.append("tspan").text(name.slice(idx + q.length));
+        } else {
+          el.append("tspan").text(name);
+        }
+      });
 
     node.exit().transition().duration(220).attr("transform", `translate(${src.y},${src.x})`).remove();
     nodes.forEach(d => { d.x0 = d.x; d.y0 = d.y; });
   }
 
   update(root);
-  resetView();
+  // Fit after animation completes
+  setTimeout(() => fitView(0), 260);
 
   window.archExpandAll = () => {
-    root.descendants().forEach(d => { if (d._children) { d.children = d._children; d._children = null; } });
+    function expandAll(d) {
+      if (d._children) { d.children = d._children; d._children = null; }
+      if (d.children) d.children.forEach(expandAll);
+    }
+    expandAll(root);
     update(root);
+    setTimeout(() => fitView(), 260);
   };
   window.archCollapseAll = () => {
-    root.descendants().forEach(d => { if (d.depth > 0 && d.children) { d._children = d.children; d.children = null; } });
+    root.descendants().forEach(d => {
+      if (d.depth >= 0 && d.children) { d._children = d.children; d.children = null; }
+    });
     update(root);
+    setTimeout(() => fitView(), 260);
   };
-  window.resetArchZoom = resetView;
+  window.resetArchZoom = () => fitView();
 
   window.archSearch = (query) => {
     const q = query.toLowerCase();
