@@ -3,11 +3,13 @@ import os
 import shutil
 import stat
 import subprocess
+import time
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 from llama_index.core import Document
 from llama_index.core.node_parser import CodeSplitter
+from llama_index.embeddings.nomic import NomicEmbedding
 from pydantic import BaseModel
 
 from constants import EXCLUDE_DIRS, INCLUDE_EXTENSIONS, LANGUAGE_MAP
@@ -185,6 +187,72 @@ def chunk_files(files: list[dict]) -> list[dict]:
             print(f"Warning: skipping {file_info['rel_path']}: {e}")
             continue
     return chunks
+
+
+_EMBED_BATCH_SIZE = 128
+
+
+def _chunk_id(repo_id: str, chunk: dict) -> str:
+    """Deterministic, collision-resistant chunk ID.
+
+    Spec format is `{repo_id}_{file_path}_{start_line}`, but multiple chunks can
+    legitimately share (file_path, start_line) — overlap windows, or fallback line
+    numbers. We append an 8-char hash of the chunk body so re-runs produce the
+    same ID while collisions don't break Chroma's unique-id constraint.
+    """
+    body = f"{chunk['file_path']}|{chunk['start_line']}|{chunk['end_line']}|{chunk['text']}"
+    suffix = hashlib.md5(body.encode()).hexdigest()[:8]
+    return f"{repo_id}_{chunk['file_path']}_{chunk['start_line']}_{suffix}"
+
+
+def embed_and_store(chunks: list[dict], repo_id: str) -> int:
+    """Embed chunks in batches via Nomic and write to the repo's Chroma collection.
+
+    Uses nomic-embed-code-v1 with task_type=search_document. Returns total stored.
+    """
+    if not chunks:
+        return 0
+
+    embed_model = NomicEmbedding(
+        api_key=os.getenv("NOMIC_API_KEY"),
+        model_name="nomic-embed-code-v1",
+        task_type="search_document",
+    )
+    collection = get_or_create_collection(repo_id)
+    total_stored = 0
+
+    for i in range(0, len(chunks), _EMBED_BATCH_SIZE):
+        batch = chunks[i:i + _EMBED_BATCH_SIZE]
+        texts = [c["text"] for c in batch]
+
+        embeddings = None
+        for attempt in range(3):
+            try:
+                embeddings = embed_model.get_text_embedding_batch(texts)
+                break
+            except Exception:
+                if attempt == 2:
+                    raise
+                time.sleep(2 ** attempt)
+
+        ids = [_chunk_id(repo_id, c) for c in batch]
+        metadatas = [{
+            "file_path": c["file_path"],
+            "language": c["language"],
+            "start_line": int(c["start_line"]),
+            "end_line": int(c["end_line"]),
+            "content_type": "code",
+        } for c in batch]
+
+        collection.add(
+            ids=ids,
+            embeddings=embeddings,
+            documents=texts,
+            metadatas=metadatas,
+        )
+        total_stored += len(batch)
+
+    return total_stored
 
 
 @router.post("/index")
