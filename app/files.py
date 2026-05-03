@@ -52,7 +52,12 @@ def reconstruct_file(repo_id: str, path: str) -> dict | None:
             line_num = start + i
             lines_by_num.setdefault(line_num, line)
 
-    content = "\n".join(lines_by_num[n] for n in sorted(lines_by_num))
+    # Fill gaps so viewer line numbers match real file line numbers.
+    if lines_by_num:
+        max_line = max(lines_by_num)
+        content = "\n".join(lines_by_num.get(n, "") for n in range(1, max_line + 1))
+    else:
+        content = ""
     language = metas[0].get("language", "unknown") if metas else "unknown"
     return {
         "file_path": path,

@@ -159,13 +159,15 @@
     #input-wrap {
       display: flex; align-items: flex-end; gap: 8px;
       background: var(--bg-active); border: 1px solid var(--border-md);
-      border-radius: 8px; padding: 8px 10px; transition: border-color .15s;
+      border-radius: 8px; padding: 12px 14px; transition: border-color .15s;
+      min-height: 70px; cursor: text;
     }
     #input-wrap:focus-within { border-color: rgba(122,162,247,.4); }
     #chat-input {
       flex: 1; background: none; border: none; outline: none;
       color: var(--text-1); font-family: var(--font-ui); font-size: 14px;
-      resize: none; max-height: 120px; scrollbar-width: thin;
+      resize: none; max-height: 200px; scrollbar-width: thin;
+      align-self: stretch;
     }
     #chat-input::placeholder { color: var(--text-3); }
     #send-btn {
@@ -662,10 +664,11 @@
         <button class="mode-btn" data-mode="narrative">Narrative</button>
         <button class="mode-btn" data-mode="agent">Agentic</button>
       </div>
+      <button id="reindex-btn" title="Force re-index this repo" style="margin-left:auto;font-size:11px;padding:2px 9px;border-radius:10px;background:rgba(158,206,106,.08);color:var(--green);border:1px solid rgba(158,206,106,.2);cursor:pointer;" onclick="forceReindex()">↺ Re-index</button>
     </div>
     <div id="messages"></div>
     <div id="input-area">
-      <div id="input-wrap">
+      <div id="input-wrap" onclick="document.getElementById('chat-input').focus()">
         <textarea id="chat-input" rows="1" placeholder="Ask anything about this codebase…"></textarea>
         <button id="send-btn">↑</button>
       </div>
@@ -753,6 +756,28 @@ const REPO_LABEL = REPO_URL
 if (!REPO_ID) { window.location.href = "index.html"; }
 
 let currentScope = null;
+
+async function forceReindex() {
+  if (!REPO_URL) { alert("No repo URL — cannot re-index."); return; }
+  const btn = document.getElementById("reindex-btn");
+  btn.disabled = true;
+  btn.textContent = "↺ Re-indexing…";
+  try {
+    const res = await fetch(`${API}/index`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ repo_url: REPO_URL, force: true }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Re-index failed");
+    // Redirect back to index page so user sees progress bar
+    window.location.href = `index.html?url=${encodeURIComponent(REPO_URL)}&force=1`;
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = "↺ Re-index";
+    alert("Re-index error: " + err.message);
+  }
+}
 
 // ── Mock data ──────────────────────────────────────────────────────────────────
 
@@ -1248,10 +1273,23 @@ async function qaSend(text) {
 }
 
 function qaRender(data, bubble) {
+  // If the LLM returned narrative JSON despite being in QA mode, render it properly
+  const answerText = data.answer || "";
+  const jsonMatch = answerText.match(/\{[\s\S]*"steps"\s*:\s*\[[\s\S]*\]/);
+  if (jsonMatch) {
+    try {
+      const parsed = JSON.parse(jsonMatch[0]);
+      if (Array.isArray(parsed.steps) && parsed.steps.length) {
+        narrativeRender({ steps: parsed.steps }, bubble);
+        return;
+      }
+    } catch (_) { /* fall through to normal QA render */ }
+  }
+
   const citations = (data.citations || []).map(c => ({
     path: c.file_path, start_line: c.start_line, end_line: c.end_line || c.start_line,
   }));
-  bubble.innerHTML = formatAnswer(data.answer || "", citations);
+  bubble.innerHTML = formatAnswer(answerText, citations);
   // Wire inline cite-chips injected by formatAnswer
   bubble.querySelectorAll(".inline-cite").forEach(chip => {
     chip.addEventListener("click", () =>
@@ -1881,7 +1919,7 @@ async function sendMessage() {
 
 sendBtn.addEventListener("click", sendMessage);
 inputEl.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
-inputEl.addEventListener("input", () => { inputEl.style.height = "auto"; inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + "px"; });
+inputEl.addEventListener("input", () => { inputEl.style.height = "auto"; inputEl.style.height = Math.min(inputEl.scrollHeight, 200) + "px"; });
 // Set initial placeholder from the default mode
 inputEl.placeholder = currentMode.placeholder;
 
@@ -1946,16 +1984,34 @@ function initArch(treeData) {
   const zoom = d3.zoom().scaleExtent([0.15, 4]).on("zoom", e => g.attr("transform", e.transform));
   svg.call(zoom);
 
-  const resetView = () =>
-    svg.transition().duration(350).call(zoom.transform, d3.zoomIdentity.translate(W * 0.1, H / 2).scale(0.88));
+  // Fit the current visible tree to the viewport with padding
+  function fitView(duration = 350) {
+    requestAnimationFrame(() => {
+      const bbox = g.node().getBBox();
+      if (!bbox.width || !bbox.height) return;
+      const cw = container.clientWidth || W;
+      const ch = container.clientHeight || H;
+      const pad = 32;
+      const scale = Math.min(1, (cw - pad * 2) / bbox.width, (ch - pad * 2) / bbox.height);
+      const tx = (cw - bbox.width * scale) / 2 - bbox.x * scale;
+      const ty = (ch - bbox.height * scale) / 2 - bbox.y * scale;
+      svg.transition().duration(duration)
+        .call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+    });
+  }
 
   const root = d3.hierarchy(treeData);
   root.x0 = H / 2; root.y0 = 0;
+  // Collapse depth ≥ 2 on load — keep top-level folders visible
   root.descendants().forEach(d => {
     if (d.depth >= 2 && d.children) { d._children = d.children; d.children = null; }
   });
 
-  const tree = d3.tree().nodeSize([20, 190]);
+  // Separate layers: links always behind nodes
+  const gLinks = g.append("g").attr("class", "arch-links");
+  const gNodes = g.append("g").attr("class", "arch-nodes");
+
+  const tree = d3.tree().nodeSize([24, 220]);
   const LANG_COLOR = { python:"#4B8BBE", javascript:"#F7DF1E", typescript:"#3178C6",
     tsx:"#3178C6", go:"#00ADD8", rust:"#CE422B", java:"#ED8B00", cpp:"#659AD2", unknown:"#6B7280" };
 
@@ -1964,14 +2020,14 @@ function initArch(treeData) {
     tree(root);
     const nodes = root.descendants(), links = root.links();
 
-    const link = g.selectAll(".al").data(links, d => d.target.data.id);
+    const link = gLinks.selectAll(".al").data(links, d => d.target.data.id);
     link.enter().append("path").attr("class","al")
       .attr("fill","none").attr("stroke","rgba(255,255,255,0.07)").attr("stroke-width",1)
       .merge(link).transition().duration(220)
       .attr("d", d3.linkHorizontal().x(d => d.y).y(d => d.x));
     link.exit().remove();
 
-    const node = g.selectAll(".an").data(nodes, d => d.data.id);
+    const node = gNodes.selectAll(".an").data(nodes, d => d.data.id);
     const enter = node.enter().append("g").attr("class","an")
       .attr("transform", `translate(${src.y0},${src.x0})`).style("cursor","pointer")
       .on("click", (_, d) => {
@@ -1981,6 +2037,7 @@ function initArch(treeData) {
         update(d);
       });
     enter.append("circle").attr("r",5).attr("stroke","rgba(255,255,255,0.1)").attr("stroke-width",1);
+    enter.append("rect").attr("class","an-lbg").attr("fill","var(--bg-main)").attr("rx",2).attr("ry",2);
     enter.append("text").attr("dy","0.32em").attr("font-family","var(--font-code)").attr("font-size","11px").attr("fill","var(--text-2)");
 
     const m = enter.merge(node);
@@ -1995,26 +2052,65 @@ function initArch(treeData) {
     m.select("text")
       .attr("x", d => (d.children || d._children) ? -9 : 9)
       .attr("text-anchor", d => (d.children || d._children) ? "end" : "start")
-      .text(d => d.data.name)
-      .attr("fill", d => (q && d.data.name.toLowerCase().includes(q)) ? "var(--cyan)" : "var(--text-2)")
-      .attr("font-weight", d => (q && d.data.name.toLowerCase().includes(q)) ? "600" : "normal");
+      .attr("fill", "var(--text-2)")
+      .attr("font-weight", "normal")
+      .each(function(d) {
+        const el = d3.select(this);
+        el.selectAll("tspan").remove();
+        const name = d.data.name;
+        const idx = q ? name.toLowerCase().indexOf(q) : -1;
+        if (idx >= 0) {
+          if (idx > 0) el.append("tspan").text(name.slice(0, idx));
+          el.append("tspan").attr("fill", "var(--cyan)").attr("font-weight", "600")
+            .text(name.slice(idx, idx + q.length));
+          if (idx + q.length < name.length)
+            el.append("tspan").text(name.slice(idx + q.length));
+        } else {
+          el.append("tspan").text(name);
+        }
+      });
 
     node.exit().transition().duration(220).attr("transform", `translate(${src.y},${src.x})`).remove();
     nodes.forEach(d => { d.x0 = d.x; d.y0 = d.y; });
+
+    // Size background rects to cover each label — run after paint so getBBox is valid
+    requestAnimationFrame(() => {
+      gNodes.selectAll(".an").each(function() {
+        const grp = d3.select(this);
+        const t = grp.select("text").node();
+        if (!t) return;
+        try {
+          const bb = t.getBBox();
+          grp.select(".an-lbg")
+            .attr("x", bb.x - 2).attr("y", bb.y - 1)
+            .attr("width", Math.max(0, bb.width + 4))
+            .attr("height", bb.height + 2);
+        } catch (_) {}
+      });
+    });
   }
 
   update(root);
-  resetView();
+  // Fit after animation completes
+  setTimeout(() => fitView(0), 260);
 
   window.archExpandAll = () => {
-    root.descendants().forEach(d => { if (d._children) { d.children = d._children; d._children = null; } });
+    function expandAll(d) {
+      if (d._children) { d.children = d._children; d._children = null; }
+      if (d.children) d.children.forEach(expandAll);
+    }
+    expandAll(root);
     update(root);
+    setTimeout(() => fitView(), 260);
   };
   window.archCollapseAll = () => {
-    root.descendants().forEach(d => { if (d.depth > 0 && d.children) { d._children = d.children; d.children = null; } });
+    root.descendants().forEach(d => {
+      if (d.depth >= 0 && d.children) { d._children = d.children; d.children = null; }
+    });
     update(root);
+    setTimeout(() => fitView(), 260);
   };
-  window.resetArchZoom = resetView;
+  window.resetArchZoom = () => fitView();
 
   window.archSearch = (query) => {
     const q = query.toLowerCase();

@@ -7,11 +7,11 @@ window.__onFileSelected = (path) => {};
 
 let _lastIndexedUrl = null;
 
-async function startIndexing() {
+async function startIndexing(force = false) {
   const url = document.getElementById("repo-url").value.trim();
   if (!url) return;
 
-  if (window.__repoId && _lastIndexedUrl === url) {
+  if (!force && window.__repoId && _lastIndexedUrl === url) {
     onIndexingComplete(window.__repoId, null);
     return;
   }
@@ -23,7 +23,7 @@ async function startIndexing() {
     const res = await fetch(`${API}/index`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ repo_url: url })
+      body: JSON.stringify({ repo_url: url, force: !!force })
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || "Indexing failed");
@@ -254,4 +254,12 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("index-error").hidden = true;
 
   loadRecentProjects();
+
+  // Auto-trigger re-index if redirected from view.html with ?force=1&url=...
+  const _p = new URLSearchParams(location.search);
+  if (_p.get("force") === "1" && _p.get("url")) {
+    const urlInput = document.getElementById("repo-url");
+    urlInput.value = decodeURIComponent(_p.get("url"));
+    startIndexing(true);
+  }
 });

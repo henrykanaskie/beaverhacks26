@@ -16,6 +16,7 @@ from constants import (
     AST_LANGUAGES,
     DATA_EXTENSIONS,
     EXCLUDE_DIRS,
+    EXCLUDE_EXTENSIONS,
     INCLUDE_EXTENSIONS,
     LANGUAGE_MAP,
     MAX_DATA_SAMPLE_CHARS,
@@ -52,6 +53,7 @@ router = APIRouter()
 
 class IndexRequest(BaseModel):
     repo_url: str
+    force: bool = False
 
 
 def validate_url(repo_url: str) -> None:
@@ -140,19 +142,17 @@ def collect_files(clone_path: str) -> list[dict]:
             continue
         if any(part in EXCLUDE_DIRS for part in file_path.parts):
             continue
-        name = file_path.name
-        suffix = file_path.suffix
-        if suffix in INCLUDE_EXTENSIONS:
-            language = LANGUAGE_MAP[suffix]
-        elif name in include_names or name.lower() in {"readme", "license", "changelog"}:
-            language = "text"
-        else:
+        if file_path.suffix.lower() in EXCLUDE_EXTENSIONS:
             continue
         rel_path = file_path.relative_to(root).as_posix()
+        is_code = file_path.suffix in INCLUDE_EXTENSIONS
+        key = file_path.suffix.lower() if file_path.suffix else file_path.name.lower()
+        language = LANGUAGE_MAP.get(key, "text")
         collected.append({
             "path": str(file_path),
             "rel_path": rel_path,
             "language": language,
+            "is_code": is_code,
         })
 
     if len(collected) > max_files:
@@ -192,6 +192,7 @@ def _raw_text_chunks(
                 "text": chunk_text,
                 "file_path": file_info["rel_path"],
                 "language": file_info["language"],
+                "is_code": file_info.get("is_code", False),
                 "start_line": start + 1,
                 "end_line": end,
             })
@@ -248,6 +249,7 @@ def _sample_data_file(content: str, file_info: dict) -> list[dict]:
         "text": text,
         "file_path": file_info["rel_path"],
         "language": file_info["language"],
+        "is_code": file_info.get("is_code", False),
         "start_line": 1,
         "end_line": min(total, text.count("\n") + 1),
     }]
@@ -257,9 +259,9 @@ def chunk_files(files: list[dict]) -> list[dict]:
     """Chunk all collected files for embedding and storage.
 
     Three strategies:
-    1. AST-aware splitting for supported code languages
-    2. Raw text chunking as fallback (non-code files or AST parse failures)
-    3. Sampled preview for large data files (.csv, .json)
+    1. Sampled preview for large data files (.csv, .json)
+    2. AST-aware splitting for supported code languages
+    3. Raw text chunking as fallback (non-code files or AST parse failures)
     """
     chunks: list[dict] = []
     for file_info in files:
@@ -296,6 +298,7 @@ def chunk_files(files: list[dict]) -> list[dict]:
                             "text": node.text,
                             "file_path": file_info["rel_path"],
                             "language": language,
+                            "is_code": file_info.get("is_code", True),
                             "start_line": int(start_line),
                             "end_line": int(end_line),
                         })
@@ -305,7 +308,6 @@ def chunk_files(files: list[dict]) -> list[dict]:
 
             # Raw text chunking (non-code files, or code files that failed AST)
             chunks.extend(_raw_text_chunks(content, file_info))
-
         except Exception as e:
             print(f"Warning: skipping {file_info['rel_path']}: {e}")
             continue
@@ -415,7 +417,7 @@ def embed_and_store(chunks: list[dict], repo_id: str, _progress_repo: str | None
             "language": c["language"],
             "start_line": int(c["start_line"]),
             "end_line": int(c["end_line"]),
-            "content_type": "code",
+            "content_type": "code" if c.get("is_code", True) else "doc",
         } for c in batch]
 
         collection.add(
@@ -485,8 +487,11 @@ async def index_repo(request: IndexRequest, background_tasks: BackgroundTasks):
     validate_url(request.repo_url)
     repo_id = get_repo_id(request.repo_url)
 
-    # Already indexed — return immediately unless collection is empty (failed/interrupted run).
-    if collection_exists(repo_id):
+    files_json_path = f"deps/{repo_id}_files.json"
+
+    # Already indexed — only short-circuit when BOTH collection and files.json exist.
+    # If files.json is missing the previous run failed partway; fall through to re-index.
+    if not request.force and collection_exists(repo_id) and os.path.exists(files_json_path):
         collection = get_or_create_collection(repo_id)
         n = collection.count()
         if n > 0:
@@ -496,6 +501,9 @@ async def index_repo(request: IndexRequest, background_tasks: BackgroundTasks):
                 "status": "already_indexed",
                 "chunk_count": n,
             }
+
+    # Stale/partial collection — wipe so we start clean
+    if collection_exists(repo_id):
         try:
             get_client().delete_collection(repo_id)
         except Exception:
