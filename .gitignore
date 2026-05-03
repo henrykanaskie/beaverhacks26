@@ -5,3 +5,8 @@ app/.env
 .venv
 /app/chroma_data/
 /app/__pycache__/
+chroma_data/
+app/chroma_data/
+clones/
+app/clones/
+app/deps/*.json
