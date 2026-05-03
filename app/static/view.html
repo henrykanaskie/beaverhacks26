@@ -596,6 +596,7 @@
         <button class="mode-btn active" data-mode="qa">Q&amp;A</button>
         <button class="mode-btn" data-mode="narrative">Narrative</button>
       </div>
+      <button id="reindex-btn" title="Force re-index this repo" style="margin-left:auto;font-size:11px;padding:2px 9px;border-radius:10px;background:rgba(158,206,106,.08);color:var(--green);border:1px solid rgba(158,206,106,.2);cursor:pointer;" onclick="forceReindex()">↺ Re-index</button>
     </div>
     <div id="messages"></div>
     <div id="input-area">
@@ -687,6 +688,28 @@ const REPO_LABEL = REPO_URL
 if (!REPO_ID) { window.location.href = "index.html"; }
 
 let currentScope = null;
+
+async function forceReindex() {
+  if (!REPO_URL) { alert("No repo URL — cannot re-index."); return; }
+  const btn = document.getElementById("reindex-btn");
+  btn.disabled = true;
+  btn.textContent = "↺ Re-indexing…";
+  try {
+    const res = await fetch(`${API}/index`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ repo_url: REPO_URL, force: true }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Re-index failed");
+    // Redirect back to index page so user sees progress bar
+    window.location.href = `index.html?url=${encodeURIComponent(REPO_URL)}&force=1`;
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = "↺ Re-index";
+    alert("Re-index error: " + err.message);
+  }
+}
 
 // ── Mock data ──────────────────────────────────────────────────────────────────
 
@@ -1025,10 +1048,23 @@ async function qaSend(text) {
 }
 
 function qaRender(data, bubble) {
+  // If the LLM returned narrative JSON despite being in QA mode, render it properly
+  const answerText = data.answer || "";
+  const jsonMatch = answerText.match(/\{[\s\S]*"steps"\s*:\s*\[[\s\S]*\]/);
+  if (jsonMatch) {
+    try {
+      const parsed = JSON.parse(jsonMatch[0]);
+      if (Array.isArray(parsed.steps) && parsed.steps.length) {
+        narrativeRender({ steps: parsed.steps }, bubble);
+        return;
+      }
+    } catch (_) { /* fall through to normal QA render */ }
+  }
+
   const citations = (data.citations || []).map(c => ({
     path: c.file_path, start_line: c.start_line, end_line: c.end_line || c.start_line,
   }));
-  bubble.innerHTML = formatAnswer(data.answer || "", citations);
+  bubble.innerHTML = formatAnswer(answerText, citations);
   // Wire inline cite-chips injected by formatAnswer
   bubble.querySelectorAll(".inline-cite").forEach(chip => {
     chip.addEventListener("click", () =>
