@@ -1,6 +1,7 @@
 .DS_STORE
 /node_modules/
 .env
+app/.env
 .venv
 /app/chroma_data/
 /app/__pycache__/
