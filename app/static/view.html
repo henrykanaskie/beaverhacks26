@@ -343,14 +343,7 @@
       <svg id="arch-svg"></svg>
     </div>
 
-    <!-- Layer: code viewer -->
-    <div class="canvas-layer" id="layer-code">
-      <div id="code-header">
-        <span id="code-file-path"></span>
-        <span id="code-lang-badge"></span>
-      </div>
-      <div id="code-scroll"><div id="code-lines"></div></div>
-    </div>
+    <!-- Code layers are injected dynamically by openCodeViewer -->
 
     <!-- Layer: trace -->
     <div class="canvas-layer" id="layer-trace">
@@ -476,6 +469,9 @@ function ensureTab(id, label, icon) {
     tab.addEventListener("click", e => {
       if (e.target.classList.contains("tab-close")) {
         tab.remove();
+        const layer = document.getElementById(`layer-${id}`);
+        if (layer && id !== "arch" && id !== "trace") layer.remove();
+        for (const [fp, lid] of openFiles) { if (lid === id) { openFiles.delete(fp); break; } }
         if (currentLayer === id) activateTab("arch");
       } else {
         activateTab(id);
@@ -495,41 +491,74 @@ document.getElementById("tab-arch").addEventListener("click", () => activateTab(
 
 // ── Code viewer ────────────────────────────────────────────────────────────────
 
+const openFiles = new Map(); // filePath → layerId
+
+function codeLayerId(filePath) {
+  return "code-" + filePath.replace(/[^a-zA-Z0-9]/g, "_");
+}
+
 function openCodeViewer(filePath, targetLine) {
   const file = FILES[filePath];
   if (!file) return;
 
+  const layerId = codeLayerId(filePath);
   const parts = filePath.split("/");
   const fname = parts.pop();
-  document.getElementById("code-file-path").innerHTML =
-    parts.map(p => `<span style="color:var(--text-3)">${esc(p)}/</span>`).join("") +
-    `<span class="fname">${esc(fname)}</span>`;
-  document.getElementById("code-lang-badge").textContent = file.language;
 
-  const linesEl = document.getElementById("code-lines");
-  linesEl.innerHTML = "";
-  const grammar = Prism.languages[file.language] || Prism.languages.clike;
-  file.content.split("\n").forEach((raw, i) => {
-    const n = i + 1;
-    const hl = targetLine && n === targetLine;
-    const row = document.createElement("div");
-    row.className = "code-line" + (hl ? " line-hl" : "");
-    row.dataset.line = n;
-    row.innerHTML =
-      `<span class="line-num">${n}</span>` +
-      `<span class="line-content language-${file.language}">${Prism.highlight(raw, grammar, file.language) || " "}</span>`;
-    linesEl.appendChild(row);
-  });
+  // Create layer + tab if this file isn't open yet
+  if (!openFiles.has(filePath)) {
+    const layer = document.createElement("div");
+    layer.className = "canvas-layer";
+    layer.id = `layer-${layerId}`;
+    layer.innerHTML =
+      `<div id="code-header-${layerId}" style="background:var(--bg-deep);border-bottom:1px solid var(--border);padding:7px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;">` +
+        `<span style="font-family:var(--font-code);font-size:12px;color:var(--text-2);">` +
+          parts.map(p => `<span style="color:var(--text-3)">${esc(p)}/</span>`).join("") +
+          `<span class="fname">${esc(fname)}</span>` +
+        `</span>` +
+        `<span style="margin-left:auto;font-family:var(--font-code);font-size:10px;padding:2px 6px;border-radius:3px;background:rgba(122,162,247,.1);color:var(--blue);border:1px solid rgba(122,162,247,.2);">${file.language}</span>` +
+      `</div>` +
+      `<div id="code-scroll-${layerId}" style="flex:1;overflow:auto;scrollbar-width:thin;scrollbar-color:var(--bg-hover) transparent;">` +
+        `<div id="code-lines-${layerId}" style="padding:12px 0;"></div>` +
+      `</div>`;
+    document.getElementById("right-pane").appendChild(layer);
 
-  const shortName = fname + (targetLine ? `:${targetLine}` : "");
-  ensureTab("code", shortName, "◧");
-  activateTab("code");
+    // Render lines
+    const linesEl = layer.querySelector(`#code-lines-${layerId}`);
+    const grammar = Prism.languages[file.language] || Prism.languages.clike;
+    file.content.split("\n").forEach((raw, i) => {
+      const n = i + 1;
+      const row = document.createElement("div");
+      row.className = "code-line";
+      row.dataset.line = n;
+      row.innerHTML =
+        `<span class="line-num">${n}</span>` +
+        `<span class="line-content language-${file.language}">${Prism.highlight(raw, grammar, file.language) || " "}</span>`;
+      linesEl.appendChild(row);
+    });
+
+    ensureTab(layerId, fname, "◧");
+    openFiles.set(filePath, layerId);
+  }
+
+  // Highlight the target line (clear previous highlights first)
+  const linesEl = document.getElementById(`code-lines-${layerId}`);
+  linesEl.querySelectorAll(".line-hl").forEach(el => el.classList.remove("line-hl"));
+  if (targetLine) {
+    const hlRow = linesEl.querySelector(`[data-line="${targetLine}"]`);
+    if (hlRow) hlRow.classList.add("line-hl");
+  }
+
+  // Update tab label with line number
+  const tabLabel = fname + (targetLine ? `:${targetLine}` : "");
+  ensureTab(layerId, tabLabel, "◧");
+  activateTab(layerId);
 
   if (targetLine) {
     requestAnimationFrame(() => {
-      const scroll = document.getElementById("code-scroll");
+      const scroll = document.getElementById(`code-scroll-${layerId}`);
       const hlRow = linesEl.querySelector(`[data-line="${targetLine}"]`);
-      if (hlRow) scroll.scrollTop = Math.max(0, hlRow.offsetTop - scroll.clientHeight / 2.5);
+      if (hlRow && scroll) scroll.scrollTop = Math.max(0, hlRow.offsetTop - scroll.clientHeight / 2.5);
     });
   }
 }
