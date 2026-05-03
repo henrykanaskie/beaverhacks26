@@ -329,6 +329,54 @@
       background: rgba(122,162,247,.15); color: var(--blue);
     }
 
+    /* ── Agent trace panel (for Agentic mode responses) ── */
+    .agent-trace {
+      margin-top: 10px;
+      border-radius: 6px;
+      background: rgba(255,255,255,.03);
+      border: 1px solid var(--border);
+      font-size: 12px;
+    }
+    .agent-trace summary {
+      cursor: pointer;
+      padding: 6px 10px;
+      color: var(--text-2);
+      font-family: var(--font-code);
+      font-size: 11px;
+      user-select: none;
+      list-style: none;
+    }
+    .agent-trace summary::-webkit-details-marker { display: none; }
+    .agent-trace summary::before {
+      content: "▶ ";
+      font-size: 9px;
+      margin-right: 4px;
+      display: inline-block;
+      transition: transform .15s;
+    }
+    .agent-trace[open] summary::before { transform: rotate(90deg); }
+    .agent-trace-steps {
+      padding: 6px 10px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .trace-step {
+      background: rgba(255,255,255,.03);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .trace-step-tool {
+      font-family: var(--font-code);
+      font-size: 11px;
+      color: var(--purple);
+      padding: 5px 8px;
+      background: rgba(187,154,247,.06);
+      border-bottom: 1px solid var(--border);
+    }
+    .trace-step-result { display: none; }
+
     /* ── Narrative player (inside assistant bubble) ── */
     .narrative-player { display: flex; flex-direction: column; gap: 10px; }
     .narrative-step {
@@ -614,6 +662,7 @@
       <div id="mode-toggle" role="tablist" aria-label="Chat mode">
         <button class="mode-btn active" data-mode="qa">Q&amp;A</button>
         <button class="mode-btn" data-mode="narrative">Narrative</button>
+        <button class="mode-btn" data-mode="agent">Agentic</button>
       </div>
       <button id="reindex-btn" title="Force re-index this repo" style="margin-left:auto;font-size:11px;padding:2px 9px;border-radius:10px;background:rgba(158,206,106,.08);color:var(--green);border:1px solid rgba(158,206,106,.2);cursor:pointer;" onclick="forceReindex()">↺ Re-index</button>
     </div>
@@ -997,15 +1046,166 @@ function appendMsg(role, html, response) {
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 
-function showThinking() {
+const THINKING_PHRASES_BY_MODE = {
+  qa: [
+    "Searching relevant code snippets…",
+    "Cross-checking context…",
+    "Drafting a grounded answer…",
+  ],
+  narrative: [
+    "Mapping the system flow…",
+    "Sequencing events into steps…",
+    "Building the walkthrough…",
+  ],
+  agent: [
+    "Planning tool calls…",
+    "Exploring files and symbols…",
+    "Synthesizing grounded findings…",
+  ],
+};
+
+let _thinkingInterval = null;
+
+function showThinking(modeId = "qa") {
+  removeThinking();
+
   const wrap = document.createElement("div");
-  wrap.className = "msg msg-assistant"; wrap.id = "_thinking";
-  const b = document.createElement("div"); b.className = "thinking";
-  b.innerHTML = "<span></span><span></span><span></span>";
-  wrap.appendChild(b); messagesEl.appendChild(wrap);
+  wrap.className = "msg msg-assistant";
+  wrap.id = "_thinking";
+
+  const label = document.createElement("span");
+  label.className = "msg-label";
+  label.textContent = "Nemotron";
+  wrap.appendChild(label);
+
+  const bubble = document.createElement("div");
+  bubble.className = "bubble";
+
+  const status = document.createElement("div");
+  status.id = "_thinking_status";
+  status.style.fontSize = "12px";
+  status.style.color = "var(--text-2)";
+  status.style.marginBottom = "8px";
+
+  const saver = document.createElement("div");
+  saver.id = "_thinking_saver";
+  saver.style.fontSize = "11px";
+  saver.style.color = "var(--text-3)";
+  saver.style.fontFamily = "var(--font-code)";
+  saver.style.display = "none";
+  saver.textContent = "Long response mode: keeping this message alive while processing.";
+
+  const dots = document.createElement("div");
+  dots.className = "thinking";
+  dots.innerHTML = "<span></span><span></span><span></span>";
+
+  const activity = document.createElement("div");
+  activity.id = "_thinking_activity";
+  activity.style.fontSize = "11px";
+  activity.style.color = "var(--text-3)";
+  activity.style.fontFamily = "var(--font-code)";
+  activity.style.marginTop = "6px";
+  activity.style.lineHeight = "1.6";
+  activity.style.display = "none";
+
+  bubble.appendChild(status);
+  bubble.appendChild(saver);
+  bubble.appendChild(activity);
+  bubble.appendChild(dots);
+  wrap.appendChild(bubble);
+  messagesEl.appendChild(wrap);
   messagesEl.scrollTop = messagesEl.scrollHeight;
+
+  const phrases = THINKING_PHRASES_BY_MODE[modeId] || THINKING_PHRASES_BY_MODE.qa;
+  const startedAt = Date.now();
+  let idx = 0;
+  status.textContent = phrases[0];
+
+  _thinkingInterval = setInterval(() => {
+    idx += 1;
+    status.textContent = phrases[idx % phrases.length];
+    const elapsedSec = Math.floor((Date.now() - startedAt) / 1000);
+    if (elapsedSec >= 8) {
+      saver.style.display = "block";
+      saver.textContent = `Long response mode (${elapsedSec}s): still working…`;
+    }
+  }, 2200);
 }
-function removeThinking() { document.getElementById("_thinking")?.remove(); }
+
+function removeThinking() {
+  if (_thinkingInterval) {
+    clearInterval(_thinkingInterval);
+    _thinkingInterval = null;
+  }
+  document.getElementById("_thinking")?.remove();
+}
+
+// Live updates from server stream — replaces the cycling phrase with real activity.
+function setLiveThinkingStatus(text) {
+  if (!text) return;
+  if (_thinkingInterval) {
+    clearInterval(_thinkingInterval);
+    _thinkingInterval = null;
+  }
+  const status = document.getElementById("_thinking_status");
+  if (status) status.textContent = text;
+}
+
+function _toolLabelClient(name, args) {
+  args = args || {};
+  if (name === "read_file") {
+    const p = args.path || "?";
+    return args.start_line ? `Reading ${p}:${args.start_line}` : `Reading ${p}`;
+  }
+  if (name === "semantic_search") {
+    const q = String(args.query || "").slice(0, 40);
+    return `Searching for "${q}"`;
+  }
+  if (name === "grep") {
+    const p = String(args.pattern || "").slice(0, 30);
+    return `Grepping for /${p}/`;
+  }
+  if (name === "list_files") {
+    return args.directory ? `Listing files in ${args.directory}/` : "Listing all files";
+  }
+  if (name === "find_references") return `Tracing imports of ${args.file_path || "?"}`;
+  if (name === "directory_tree") {
+    return args.directory ? `Mapping ${args.directory}/` : "Mapping the project structure";
+  }
+  return `Running ${name}`;
+}
+
+function addLiveThinkingActivity(idx, name, args) {
+  const activity = document.getElementById("_thinking_activity");
+  if (!activity) return;
+  const key = Number.isInteger(idx) ? String(idx) : `auto-${activity.children.length}`;
+  if (activity.querySelector(`[data-key="${key}"]`)) return;
+  const line = document.createElement("div");
+  line.dataset.key = key;
+  line.dataset.state = "pending";
+  line.textContent = "› " + _toolLabelClient(name, args);
+  line.style.opacity = "0.55";
+  activity.appendChild(line);
+  activity.style.display = "block";
+  // Cap visible activity to last 6 lines so the bubble doesn't grow unbounded
+  while (activity.children.length > 6) activity.removeChild(activity.firstChild);
+}
+
+function markLiveThinkingActivityDone(idx) {
+  const activity = document.getElementById("_thinking_activity");
+  if (!activity) return;
+  const key = Number.isInteger(idx) ? String(idx) : null;
+  let line = key ? activity.querySelector(`[data-key="${key}"]`) : null;
+  if (!line) {
+    // Fallback: mark the most recent pending line
+    const pending = activity.querySelectorAll('[data-state="pending"]');
+    line = pending[pending.length - 1];
+  }
+  if (!line) return;
+  line.dataset.state = "done";
+  line.style.opacity = "1";
+  line.textContent = "✓ " + line.textContent.slice(2);
+}
 
 function formatAnswer(text, citations) {
   let html = esc(text);
@@ -1055,15 +1255,22 @@ function formatAnswer(text, citations) {
 //   async send(text, ctx) -> responseObj  — performs fetch, returns raw data
 //   render(responseObj, bubbleEl, ctx)    — builds DOM inside the assistant bubble
 
-async function qaSend(text) {
+async function qaSend(text, ctx) {
   const res = await fetch(`${API}/query`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ repo_id: REPO_ID, question: text, scope: currentScope || null }),
+    signal: ctx?.signal,
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.detail || "Query failed");
-  return data;
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({}));
+    throw new Error(errBody.detail || `Query failed (HTTP ${res.status})`);
+  }
+  const streamed = await readNdjsonResponse(res);
+  return {
+    answer: streamed.answer || "",
+    citations: streamed.citations || [],
+  };
 }
 
 function qaRender(data, bubble) {
@@ -1104,11 +1311,12 @@ function qaRender(data, bubble) {
   }
 }
 
-async function narrativeSend(text) {
+async function narrativeSend(text, ctx) {
   const res = await fetch(`${API}/narrative/${encodeURIComponent(REPO_ID)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ question: text }),
+    signal: ctx?.signal,
   });
   const data = await res.json();
   if (!res.ok) {
@@ -1119,6 +1327,129 @@ async function narrativeSend(text) {
     throw err;
   }
   return data;
+}
+
+async function agentSend(text, ctx) {
+  const res = await fetch(`${API}/agent`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      repo_id: REPO_ID,
+      question: text,
+      scope: currentScope || null,
+      history: [],
+    }),
+    signal: ctx?.signal,
+  });
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({}));
+    throw new Error(errBody.detail || `Agent query failed (HTTP ${res.status})`);
+  }
+  const streamed = await readNdjsonResponse(res, ctx && ctx.onEvent);
+  return {
+    answer: streamed.answer || "",
+    citations: streamed.citations || [],
+    tool_trace: streamed.tool_trace || [],
+  };
+}
+
+async function readNdjsonResponse(res, onEvent) {
+  const reader = res.body?.getReader?.();
+  if (!reader) throw new Error("Streaming response not available");
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let accumulated = "";
+  let finalAnswer = "";
+  let citations = [];
+  let toolTrace = [];
+  const streamedToolTrace = [];
+  const byIdx = new Map();
+  const emit = (e) => { if (onEvent) { try { onEvent(e); } catch {} } };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      let event;
+      try {
+        event = JSON.parse(trimmed);
+      } catch {
+        continue;
+      }
+      emit(event);
+      if (event.type === "token") {
+        accumulated += event.text || "";
+      } else if (event.type === "tool_call") {
+        const idx = Number.isInteger(event.idx) ? event.idx : streamedToolTrace.length;
+        const entry = {
+          name: event.name || "tool",
+          args: event.args || {},
+          result: "",
+        };
+        byIdx.set(idx, entry);
+        streamedToolTrace.push(entry);
+      } else if (event.type === "tool_result") {
+        const idx = Number.isInteger(event.idx) ? event.idx : -1;
+        const existing = idx >= 0 ? byIdx.get(idx) : null;
+        if (existing) {
+          existing.result = event.result || existing.result || "";
+        } else {
+          streamedToolTrace.push({
+            name: event.name || "tool",
+            args: event.args || {},
+            result: event.result || "",
+          });
+        }
+      } else if (event.type === "done") {
+        finalAnswer = event.answer || accumulated || "";
+        citations = event.citations || [];
+        toolTrace = event.tool_trace || [];
+      } else if (event.type === "error") {
+        throw new Error(event.message || "Generation failed");
+      }
+    }
+  }
+
+  const tail = buffer.trim();
+  if (tail) {
+    try {
+      const event = JSON.parse(tail);
+      emit(event);
+      if (event.type === "done") {
+        finalAnswer = event.answer || accumulated || "";
+        citations = event.citations || [];
+        toolTrace = event.tool_trace || [];
+      } else if (event.type === "token") {
+        accumulated += event.text || "";
+      } else if (event.type === "tool_call") {
+        streamedToolTrace.push({
+          name: event.name || "tool",
+          args: event.args || {},
+          result: "",
+        });
+      } else if (event.type === "tool_result") {
+        const last = streamedToolTrace[streamedToolTrace.length - 1];
+        if (last && !last.result) last.result = event.result || "";
+      } else if (event.type === "error") {
+        throw new Error(event.message || "Generation failed");
+      }
+    } catch {
+      // ignore incomplete/garbled trailing fragment
+    }
+  }
+
+  return {
+    answer: finalAnswer || accumulated,
+    citations,
+    tool_trace: (toolTrace && toolTrace.length) ? toolTrace : streamedToolTrace,
+  };
 }
 
 function narrativeRender(data, bubble) {
@@ -1457,6 +1788,60 @@ function narrativeRender(data, bubble) {
   renderStep(0);
 }
 
+function agentRender(data, bubble) {
+  const citations = (data.citations || []).map(c => ({
+    path: c.file_path,
+    start_line: c.start_line,
+    end_line: c.end_line || c.start_line,
+  }));
+  bubble.innerHTML = formatAnswer(data.answer || "", citations);
+  bubble.querySelectorAll(".inline-cite").forEach(chip => {
+    chip.addEventListener("click", () =>
+      openCodeViewer(chip.dataset.path, +chip.dataset.start, +chip.dataset.end));
+  });
+
+  if (citations.length) {
+    const chips = document.createElement("div");
+    chips.className = "citations";
+    citations.forEach(c => {
+      const chip = document.createElement("span");
+      chip.className = "cite-chip";
+      const endStr = c.end_line !== c.start_line ? `-${c.end_line}` : "";
+      chip.textContent = `${c.path}:${c.start_line}${endStr}`;
+      chip.addEventListener("click", () => openCodeViewer(c.path, c.start_line, c.end_line));
+      chips.appendChild(chip);
+    });
+    bubble.appendChild(chips);
+  }
+
+  if (data.tool_trace && data.tool_trace.length) {
+    const details = document.createElement("details");
+    details.className = "agent-trace";
+    const summary = document.createElement("summary");
+    summary.textContent = `Used ${data.tool_trace.length} tool${data.tool_trace.length !== 1 ? "s" : ""}`;
+    details.appendChild(summary);
+
+    const stepsDiv = document.createElement("div");
+    stepsDiv.className = "agent-trace-steps";
+    data.tool_trace.forEach(step => {
+      const stepEl = document.createElement("div");
+      stepEl.className = "trace-step";
+
+      const toolEl = document.createElement("div");
+      toolEl.className = "trace-step-tool";
+      const args = step.args && typeof step.args === "object" ? step.args : {};
+      const keys = Object.keys(args);
+      const argsSummary = keys.length ? ` · ${keys.join(", ")}` : "";
+      toolEl.textContent = `${step.name}${argsSummary}`;
+      stepEl.appendChild(toolEl);
+
+      stepsDiv.appendChild(stepEl);
+    });
+    details.appendChild(stepsDiv);
+    bubble.appendChild(details);
+  }
+}
+
 const ChatModes = {
   qa: {
     id: "qa",
@@ -1471,6 +1856,13 @@ const ChatModes = {
     placeholder: "Ask me to narrate a flow — e.g. how does a user's question reach the database?",
     send: narrativeSend,
     render: narrativeRender,
+  },
+  agent: {
+    id: "agent",
+    label: "Agentic",
+    placeholder: "Ask for grounded agentic search across the codebase…",
+    send: agentSend,
+    render: agentRender,
   },
   // future modes (speech-to-speech, debate, etc.) plug in here
 };
@@ -1491,18 +1883,48 @@ document.querySelectorAll(".mode-btn").forEach(btn => {
   btn.addEventListener("click", () => setChatMode(btn.dataset.mode));
 });
 
+let activeController = null;
+
+function setSendBtnState(state) {
+  if (state === "stop") {
+    sendBtn.textContent = "■";
+    sendBtn.title = "stop answering";
+    sendBtn.dataset.mode = "stop";
+    sendBtn.disabled = false;
+  } else {
+    sendBtn.textContent = "↑";
+    sendBtn.title = "";
+    sendBtn.dataset.mode = "send";
+    sendBtn.disabled = false;
+  }
+}
+
 async function sendMessage() {
   const text = inputEl.value.trim();
   if (!text) return;
   const mode = currentMode;
+  const originalInput = inputEl.value;
   inputEl.value = ""; inputEl.style.height = "auto";
-  sendBtn.disabled = true;
+  const controller = new AbortController();
+  activeController = controller;
+  setSendBtnState("stop");
   appendMsg("user", esc(text));
-  showThinking();
+  showThinking(mode.id);
+
+  const onEvent = (evt) => {
+    if (!evt) return;
+    if (evt.type === "status") {
+      setLiveThinkingStatus(evt.text || "");
+    } else if (evt.type === "tool_call") {
+      addLiveThinkingActivity(evt.idx, evt.name, evt.args);
+    } else if (evt.type === "tool_result") {
+      markLiveThinkingActivityDone(evt.idx);
+    }
+  };
 
   // Build an empty assistant bubble upfront so mode.render can populate it
   try {
-    const data = await mode.send(text, { REPO_ID, API });
+    const data = await mode.send(text, { REPO_ID, API, onEvent, signal: controller.signal });
     removeThinking();
     const wrap = document.createElement("div");
     wrap.className = "msg msg-assistant";
@@ -1517,6 +1939,15 @@ async function sendMessage() {
     mode.render(data, bubble, { REPO_ID, API });
     messagesEl.scrollTop = messagesEl.scrollHeight;
   } catch (err) {
+    if (err?.name === "AbortError" || controller.signal.aborted) {
+      removeThinking();
+      appendMsg("assistant", `<span style="color:var(--text-3);font-style:italic">response stopped</span>`, null);
+      inputEl.value = originalInput;
+      inputEl.style.height = "auto";
+      inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + "px";
+      inputEl.focus();
+      return;
+    }
     removeThinking();
     let html = `<span style="color:var(--red)">${esc(String(err.message || err))}</span>`;
     if (err.raw) {
@@ -1525,13 +1956,26 @@ async function sendMessage() {
     }
     appendMsg("assistant", html, null);
   } finally {
-    sendBtn.disabled = false;
+    if (activeController === controller) activeController = null;
+    setSendBtnState("send");
   }
 }
 
-sendBtn.addEventListener("click", sendMessage);
-inputEl.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
-inputEl.addEventListener("input", () => { inputEl.style.height = "auto"; inputEl.style.height = Math.min(inputEl.scrollHeight, 200) + "px"; });
+sendBtn.addEventListener("click", () => {
+  if (sendBtn.dataset.mode === "stop") {
+    activeController?.abort();
+  } else {
+    sendMessage();
+  }
+});
+inputEl.addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    if (activeController) return;
+    sendMessage();
+  }
+});
+inputEl.addEventListener("input", () => { inputEl.style.height = "auto"; inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + "px"; });
 // Set initial placeholder from the default mode
 inputEl.placeholder = currentMode.placeholder;
 

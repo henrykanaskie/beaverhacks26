@@ -218,26 +218,41 @@ After indexing flask:
 
 ---
 
-# PODCAST
+# LIVE CONVERSATION
 
-## POD-01 — Speech endpoint (text fallback)
+## POD-01 — Speech endpoint (Whisper + RAG + Kokoro)
 
-| # | Test | Expected result |
-|---|------|----------------|
-| 1 | `POST /speech {"repo_id": "{repo_id}", "transcript": "how does auth work?"}` | 200 with `{transcript, answer, citations, audio_base64: null}` |
-| 2 | `audio_base64` field | Always `null` for fallback path |
-| 3 | `answer` matches what `POST /query` would return for same question | Yes (same pipeline) |
-| 4 | `POST /speech` with unknown repo_id | 404 |
-| 5 | `POST /speech` with empty transcript | Returns gracefully (empty answer or "I cannot determine...") |
-
-## POD-02 — VoiceChat (skip if no Early Access)
+Record a short clip ("how does auth work?") with `ffmpeg` or any tool, base64-encode it, and POST it.
 
 | # | Test | Expected result |
 |---|------|----------------|
-| 1 | `POST /speech` with `audio_base64: null` | Behaves like POD-01 (text fallback) |
-| 2 | `POST /speech` with valid base64 audio + transcript | If VoiceChat available: returns non-null `audio_base64` |
-| 3 | Mock VoiceChat to raise an exception | Endpoint still returns 200 with fallback text answer (never 500) |
-| 4 | Code review: `n_results=10` reranked to top-3 (not top-5) for VoiceChat | Confirmed |
+| 1 | `POST /speech {"repo_id": "{repo_id}", "audio_base64": "<webm>"}` with `NVIDIA_API_KEY` set | 200 with `{conversation_id, transcript, stt_source: "nvidia", answer, citations, audio_base64, audio_mime: "audio/wav"}` — all populated |
+| 2 | `transcript` value | Non-empty, roughly matches the spoken question (ASR output, not echo of input) |
+| 3 | `answer` and `citations` for the resulting `transcript` | Byte-for-byte identical to what `POST /query` returns for the same `transcript` and `scope` |
+| 4 | Decode `audio_base64` and play | Plays valid wav speech that reads the `answer` text |
+| 5 | Mock NVIDIA STT to return 503 (or unreachable host) | Endpoint still 200 with `stt_source: "whisper"` — fallback engaged |
+| 6 | Unset `NVIDIA_API_KEY`, hit `/speech` | Hosted call is skipped (zero outbound RTT); response carries `stt_source: "whisper"` |
+| 7 | App startup logs | **Kokoro** loads exactly once. **Whisper does not load** until the first fallback turn fires; logs confirm a single Whisper load on first fallback and cached reuse thereafter |
+| 8 | `POST /speech` with unknown `repo_id` | 404 `"Repo not indexed"` |
+| 9 | `POST /speech` with audio of pure silence | 400 `"Empty or unintelligible audio"` |
+| 10 | `POST /speech` with `audio_base64` that is not valid base64 | 400 `"audio_base64 is not valid base64"` |
+| 11 | Both NVIDIA STT and Whisper mocked to fail | 503 with descriptive message — never 500 |
+| 12 | End-to-end latency on the NVIDIA path for a one-sentence answer | Under ~3 seconds per turn |
+| 13 | End-to-end latency on the Whisper-fallback path for a one-sentence answer | Under ~5 seconds per turn |
+| 14 | Code review: `speech.py` calls `query_repo` directly — does not duplicate retrieval | Confirmed |
+| 15 | Code review: only NVIDIA hosted STT and local Whisper are called — no other cloud STT/TTS providers | Confirmed |
+
+## POD-02 — Multi-turn conversation history
+
+| # | Test | Expected result |
+|---|------|----------------|
+| 1 | First turn with `conversation_id: null` | Response carries a server-generated, non-null `conversation_id` |
+| 2 | Second turn echoing that `conversation_id`, asking a follow-up like "what about the JWT side?" | Answer references the prior topic (auth), proving history was used |
+| 3 | After 4+ turns on the same conversation, inspect `_HISTORY[cid]` | `len() <= 6` (deque maxlen enforced) |
+| 4 | `DELETE /speech/conversation/{id}` | Returns `{conversation_id, status: "cleared"}`; next turn behaves as a fresh conversation |
+| 5 | Follow-up turn with an unknown `conversation_id` | Treated as fresh conversation, no error |
+| 6 | Code review: only the latest user transcript drives retrieval (embedding); history is only added to the LLM-facing question | Confirmed |
+| 7 | Server restart clears all conversations (in-memory only — no DB row) | Confirmed |
 
 ---
 
@@ -315,19 +330,25 @@ Open `http://localhost:8000` in browser:
 
 ---
 
-## FE-06 — Podcast UI
+## FE-06 — Live Conversation UI
 
-Test in Chrome (best Web Speech API support):
+Test in any evergreen browser with `MediaRecorder` (Chrome, Edge, Firefox, Safari 14.1+):
 
 | # | Test | Expected result |
 |---|------|----------------|
-| 1 | Podcast panel appears after indexing | Yes |
-| 2 | Click mic button, grant mic permission, speak a question | Transcript appears as "You: ..." |
-| 3 | After transcript | Answer text shown and spoken aloud via `SpeechSynthesis` |
-| 4 | Click mic button while recording | Recording stops |
-| 5 | Open in Firefox (or browser without SpeechRecognition) | Shows "Voice not supported" message, no crash |
-| 6 | Click mic before any repo is indexed | Nothing sent (`window.__repoId` null check) |
-| 7 | If VoiceChat returns audio | Plays via `Audio` element (not `<audio autoplay>`) |
+| 1 | "Live conversation" panel appears after indexing | Yes — with mic button, "New conversation" button (disabled), status indicator, transcript log |
+| 2 | First click on mic button | Browser asks for mic permission; on grant, status reads "Recording — click again to send", button text becomes "Stop and send" |
+| 3 | Second click on mic button | Recording stops, status reads "Transcribing and answering..." |
+| 4 | After response arrives | User transcript and assistant answer appear in the log with citation chips; assistant audio auto-plays via `new Audio(...).play()` (not `<audio autoplay>`) |
+| 5 | DevTools network tab — first turn request body | `conversation_id` is `null`; response carries a server-generated `conversation_id` |
+| 6 | Second turn request body | `conversation_id` matches the one from turn 1 |
+| 7 | Click "New conversation" | `DELETE /speech/conversation/{id}` is sent; transcript log clears; next turn starts a fresh conversation |
+| 8 | Spam-click the mic button while a turn is in flight | Extra clicks are ignored (`_liveBusy` guard) |
+| 9 | Deny mic permission | Status reads "Mic permission denied: ..."; no crash; rest of the UI still works |
+| 10 | Open in a browser without `MediaRecorder` | "This browser does not support audio recording" message; no errors |
+| 11 | Click mic before any repo is indexed | Nothing happens (`window.__repoId` null check) |
+| 12 | XSS test: mock answer containing `<script>alert(1)</script>` | Rendered as text, not executed (uses `escapeHtml`) |
+| 13 | Code review: no `SpeechRecognition` or `SpeechSynthesis` calls anywhere in the live conversation code | Confirmed (Web Speech API is not used) |
 
 ---
 
