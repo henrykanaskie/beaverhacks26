@@ -525,3 +525,356 @@ def post_zoom(repo_id: str, request: ZoomRequest):
 
     _zoom_cache[cache_key] = result
     return result
+
+
+# ── Trace impact (single-file change consequence analysis) ───────────────────
+
+
+_TRACE_FILE_CHUNK_CAP = 6      # chunks pulled per file mentioned as origin
+_TRACE_DEP_CHUNK_CAP = 2       # chunks pulled per depending file for context
+_TRACE_DEP_FILES_CAP = 12      # max depending files to pull chunks for
+
+
+class TraceImpactRequest(BaseModel):
+    question: str
+    origin_file: str | None = None
+
+
+def _load_dep_graph(repo_id: str) -> dict[str, list[str]]:
+    """Load the reverse dependency graph (file -> files that import it)."""
+    dep_path = _DEPS_DIR / f"{repo_id}_deps.json"
+    if not dep_path.exists():
+        return {}
+    try:
+        with open(dep_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, dict):
+            return {k: list(v) if isinstance(v, list) else [] for k, v in data.items()}
+    except Exception:
+        pass
+    return {}
+
+
+def _guess_origin_file(question: str, all_files: list[str]) -> str | None:
+    """Heuristically pick the file the user is asking about.
+
+    Picks the longest-matching repo-relative path or filename that appears
+    verbatim in the question. Returns None if nothing matches.
+    """
+    q = question or ""
+    if not q or not all_files:
+        return None
+
+    candidates: list[tuple[int, str]] = []
+    q_lower = q.lower()
+    for fp in all_files:
+        if not fp:
+            continue
+        if fp in q:
+            candidates.append((len(fp), fp))
+            continue
+        # filename only match (e.g. "system.py")
+        name = fp.split("/")[-1]
+        if name and len(name) >= 3 and name in q:
+            candidates.append((len(name), fp))
+            continue
+        # case-insensitive fallback
+        if fp.lower() in q_lower:
+            candidates.append((len(fp), fp))
+
+    if not candidates:
+        return None
+    candidates.sort(key=lambda x: x[0], reverse=True)
+    return candidates[0][1]
+
+
+def _chunks_for_file(repo_id: str, file_path: str, cap: int) -> list[dict]:
+    """Pull up to `cap` chunks for a specific file from Chroma."""
+    if not file_path:
+        return []
+    try:
+        collection = get_or_create_collection(repo_id)
+        results = collection.get(
+            where={"file_path": file_path},
+            limit=cap,
+            include=["documents", "metadatas"],
+        )
+        docs = results.get("documents") or []
+        metas = results.get("metadatas") or []
+        return [{"text": d, "metadata": m} for d, m in zip(docs, metas)]
+    except Exception:
+        return []
+
+
+def _build_trace_prompt(
+    question: str,
+    origin_file: str | None,
+    all_files: list[str],
+    direct_dependents: list[str],
+    system_doc: dict,
+    origin_chunks: list[dict],
+    dep_chunks: list[dict],
+) -> str:
+    def _fmt_chunks(chunks: list[dict]) -> str:
+        out = ""
+        for c in chunks:
+            m = c["metadata"]
+            out += f"[{m.get('file_path', '')}:{m.get('start_line', 1)}]\n"
+            out += f"```{m.get('language', '')}\n{c['text']}\n```\n\n"
+        return out or "(none)"
+
+    slim_components = [
+        {"id": c["id"], "label": c["label"], "kind": c["kind"], "files": c.get("files", [])[:4]}
+        for c in system_doc.get("components", [])
+    ]
+    slim_edges = [
+        {"id": e["id"], "from": e["from"], "to": e["to"], "label": e["label"]}
+        for e in system_doc.get("edges", [])
+    ]
+    system_block = json.dumps({"components": slim_components, "edges": slim_edges}, indent=2)
+
+    files_block = "\n".join(all_files[:300])
+    direct_block = "\n".join(f"  - {fp}" for fp in direct_dependents[:40]) or "  (none — file has no static reverse deps)"
+
+    origin_line = origin_file or "(unknown — infer the most likely target file from the question and file list)"
+
+    return f"""You are a senior engineer performing CHANGE IMPACT ANALYSIS on a single file in
+this codebase. The user wants to know how a change/action in ONE specific file
+will ripple through the rest of the system. Decide which other files are
+SIGNIFICANTLY affected, infer the most likely causal path from the origin file
+to the most impacted target file(s), and explain the consequences.
+
+You are the source of truth for SIGNIFICANCE. Static reverse-dependencies are
+provided as a hint, but you should weigh them against the question's intent
+(e.g. a refactor of an API contract, a change to a shared schema, or a UI
+event handler) and include files that are conceptually impacted even if the
+static graph misses them. Likewise, prune static dependents that are NOT
+meaningfully impacted by the user's change.
+
+Respond with ONLY a single JSON object — no prose, no code fences:
+
+{{
+  "origin_file": "<repo-relative path of the file the user is asking about>",
+  "primary_path": ["<origin_file>", "<intermediate file>", ..., "<target file>"],
+  "related_files": [
+    {{
+      "file_path": "<repo-relative path>",
+      "significance": "high" | "medium" | "low",
+      "reason": "<1 short sentence describing why this file is affected>"
+    }}
+  ],
+  "connections": [
+    {{
+      "from": "<repo-relative path>",
+      "to": "<repo-relative path>",
+      "kind": "imports" | "calls" | "data" | "event" | "config" | "schema" | "ui",
+      "detail": "<short explanation of how the change in `from` propagates to `to`>"
+    }}
+  ],
+  "summary": "<2-5 short paragraphs explaining the consequences of changing the origin file. You may use `inline code` and inline citations like [path:line]. Target ~200-350 words.>",
+  "citations": [
+    {{ "file_path": "<path>", "start_line": <int> }}
+  ]
+}}
+
+Guidelines:
+- All file paths MUST appear in the REPO FILE LIST below. Do NOT invent files.
+- `primary_path` is the single most important causal chain: start at `origin_file`,
+  end at the most impacted target file. 2-6 entries. Each consecutive pair must
+  represent a real or strongly-implied connection (import, call, shared schema,
+  UI -> handler, etc.). Skip intermediates only if there is no reasonable file
+  between origin and target.
+- `related_files` should list 3-12 OTHER files (excluding files already in
+  `primary_path`) that the origin change touches in some way. Rank by
+  significance — high-significance items go first.
+- `connections` should describe at least every edge in `primary_path` plus the
+  most important origin -> related_file links. 4-15 entries total.
+- `summary` is the consequence/connection breakdown shown in the user's chat.
+  Discuss the ripple effects, breaking changes, tests likely to fail, and any
+  cross-component coordination required.
+- Inline citations in `summary` use the form [path:line] and MUST refer to files
+  in the provided context.
+
+USER QUESTION: {question}
+
+CANDIDATE ORIGIN FILE (heuristic guess — confirm or override): {origin_line}
+
+REPO FILE LIST (truncated to 300):
+{files_block}
+
+STATIC REVERSE DEPENDENTS OF ORIGIN (files that import the origin file):
+{direct_block}
+
+SYSTEM ARCHITECTURE (logical components & edges):
+{system_block}
+
+ORIGIN FILE CODE CONTEXT:
+{_fmt_chunks(origin_chunks)}
+
+DEPENDENT FILES CODE CONTEXT:
+{_fmt_chunks(dep_chunks)}
+
+JSON:"""
+
+
+@router.post("/trace_impact/{repo_id}")
+def post_trace_impact(repo_id: str, request: TraceImpactRequest):
+    if not collection_exists(repo_id):
+        raise HTTPException(status_code=404, detail="Repo not indexed")
+
+    files_path = _DEPS_DIR / f"{repo_id}_files.json"
+    if not files_path.exists():
+        raise HTTPException(status_code=404, detail="File list missing — re-index repo")
+    with open(files_path, "r", encoding="utf-8") as f:
+        all_files = json.load(f)
+    file_set = set(all_files)
+
+    # System diagram (cached)
+    system_cache = _DEPS_DIR / f"{repo_id}_system.json"
+    if system_cache.exists():
+        with open(system_cache, "r", encoding="utf-8") as f:
+            system_doc = json.load(f)
+    else:
+        system_doc = _generate_system_doc(repo_id)
+
+    # Reverse dependency graph (file -> files that import it)
+    dep_graph = _load_dep_graph(repo_id)
+
+    # Resolve / guess the origin file
+    origin_file = (request.origin_file or "").strip().lstrip("/") or None
+    if origin_file and origin_file not in file_set:
+        origin_file = None
+    if not origin_file:
+        origin_file = _guess_origin_file(request.question, all_files)
+
+    direct_dependents: list[str] = []
+    if origin_file and origin_file in dep_graph:
+        direct_dependents = [d for d in dep_graph[origin_file] if d in file_set]
+
+    # Pull code chunks: origin file + a sample of direct dependents
+    origin_chunks = _chunks_for_file(repo_id, origin_file, _TRACE_FILE_CHUNK_CAP) if origin_file else []
+    dep_chunks: list[dict] = []
+    for fp in direct_dependents[:_TRACE_DEP_FILES_CAP]:
+        dep_chunks.extend(_chunks_for_file(repo_id, fp, _TRACE_DEP_CHUNK_CAP))
+
+    # Fallback retrieval if we have no concrete code context (no origin found)
+    if not origin_chunks and not dep_chunks:
+        origin_chunks = _retrieve_rag_chunks(repo_id, request.question, k=6)
+
+    prompt = _build_trace_prompt(
+        question=request.question,
+        origin_file=origin_file,
+        all_files=all_files,
+        direct_dependents=direct_dependents,
+        system_doc=system_doc,
+        origin_chunks=origin_chunks,
+        dep_chunks=dep_chunks,
+    )
+
+    llm = get_llm("trace")
+    raw = str(llm.complete(prompt))
+
+    parsed = _parse_json_from_llm(raw)
+    if not parsed or not isinstance(parsed, dict):
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "message": "Nemotron returned invalid trace JSON.",
+                "raw": raw[:800],
+            },
+        )
+
+    # ── Sanitize the model output ────────────────────────────────────────────
+    def _norm_path(p) -> str | None:
+        if not isinstance(p, str):
+            return None
+        p = p.strip().lstrip("/")
+        return p if p in file_set else None
+
+    out_origin = _norm_path(parsed.get("origin_file")) or origin_file
+
+    # Primary path: keep only known files, dedupe in order
+    primary_in = parsed.get("primary_path") or []
+    primary_path: list[str] = []
+    seen_p: set[str] = set()
+    for entry in primary_in:
+        fp = _norm_path(entry)
+        if fp and fp not in seen_p:
+            seen_p.add(fp)
+            primary_path.append(fp)
+    if out_origin and (not primary_path or primary_path[0] != out_origin):
+        primary_path = [out_origin] + [p for p in primary_path if p != out_origin]
+
+    primary_set = set(primary_path)
+
+    # Related files
+    related_in = parsed.get("related_files") or []
+    related_files: list[dict] = []
+    seen_r: set[str] = set()
+    for r in related_in:
+        if not isinstance(r, dict):
+            continue
+        fp = _norm_path(r.get("file_path"))
+        if not fp or fp in primary_set or fp in seen_r:
+            continue
+        sig = str(r.get("significance") or "medium").lower()
+        if sig not in ("high", "medium", "low"):
+            sig = "medium"
+        related_files.append({
+            "file_path": fp,
+            "significance": sig,
+            "reason": str(r.get("reason") or "")[:400],
+        })
+        seen_r.add(fp)
+
+    sig_order = {"high": 0, "medium": 1, "low": 2}
+    related_files.sort(key=lambda x: sig_order.get(x["significance"], 1))
+
+    # Connections (edges)
+    connections_in = parsed.get("connections") or []
+    connections: list[dict] = []
+    valid_kinds = {"imports", "calls", "data", "event", "config", "schema", "ui"}
+    for c in connections_in:
+        if not isinstance(c, dict):
+            continue
+        a = _norm_path(c.get("from"))
+        b = _norm_path(c.get("to"))
+        if not a or not b or a == b:
+            continue
+        kind = str(c.get("kind") or "calls").lower()
+        if kind not in valid_kinds:
+            kind = "calls"
+        connections.append({
+            "from": a,
+            "to": b,
+            "kind": kind,
+            "detail": str(c.get("detail") or "")[:400],
+        })
+
+    # Citations
+    def _clean_cite(obj):
+        if not isinstance(obj, dict):
+            return None
+        fp = obj.get("file_path")
+        if not isinstance(fp, str) or not fp.strip():
+            return None
+        ref = {"file_path": fp.strip().lstrip("/")}
+        sl = obj.get("start_line")
+        try:
+            ref["start_line"] = int(sl) if sl is not None else 1
+        except Exception:
+            ref["start_line"] = 1
+        return ref
+
+    citations = [c for c in (_clean_cite(x) for x in (parsed.get("citations") or [])) if c]
+
+    return {
+        "repo_id": repo_id,
+        "question": request.question,
+        "origin_file": out_origin,
+        "primary_path": primary_path,
+        "related_files": related_files,
+        "connections": connections,
+        "summary": str(parsed.get("summary") or ""),
+        "citations": citations,
+    }
