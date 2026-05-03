@@ -1339,6 +1339,7 @@ async function agentSend(text, ctx) {
       scope: currentScope || null,
       history: [],
     }),
+    signal: ctx?.signal,
   });
   if (!res.ok) {
     const errBody = await res.json().catch(() => ({}));
