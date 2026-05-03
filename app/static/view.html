@@ -313,21 +313,52 @@
     .trace-badge.direct     { background: rgba(247,118,142,.12); color: var(--red);    border: 1px solid rgba(247,118,142,.22); }
     .trace-badge.transitive { background: rgba(224,175,104,.12); color: var(--yellow); border: 1px solid rgba(224,175,104,.22); }
 
-    /* ── Chat mode toggle ── */
+    /* ── Chat mode segmented toggle ── */
     #mode-toggle {
-      margin-left: auto; display: inline-flex; gap: 2px;
-      background: var(--bg-active); border: 1px solid var(--border-md);
-      border-radius: 6px; padding: 2px;
+      margin-left: auto;
+      position: relative;
+      display: inline-flex; align-items: stretch;
+      background: var(--bg-active);
+      border: 1px solid var(--border-md);
+      border-radius: 7px;
+      padding: 2px;
+    }
+    .mode-slider {
+      position: absolute;
+      top: 0; left: 0;
+      width: 0; height: 0;
+      background: rgba(122,162,247,.18);
+      border: 1px solid rgba(122,162,247,.4);
+      border-radius: 5px;
+      transition:
+        transform .25s cubic-bezier(.4,0,.2,1),
+        width     .25s cubic-bezier(.4,0,.2,1),
+        height    .25s cubic-bezier(.4,0,.2,1),
+        background .2s ease,
+        border-color .2s ease;
+      pointer-events: none;
+      z-index: 0;
+      box-sizing: border-box;
     }
     .mode-btn {
+      position: relative;
+      z-index: 1;
       font-family: var(--font-ui); font-size: 11px; font-weight: 500;
-      color: var(--text-2); background: none; border: none; border-radius: 4px;
-      padding: 4px 10px; cursor: pointer; transition: background .12s, color .12s;
+      color: var(--text-2);
+      background: none; border: none; border-radius: 5px;
+      padding: 5px 14px; cursor: pointer;
+      transition: color .15s;
+      white-space: nowrap;
     }
     .mode-btn:hover { color: var(--text-1); }
-    .mode-btn.active {
-      background: rgba(122,162,247,.15); color: var(--blue);
+    .mode-btn.active { color: var(--blue); }
+    .mode-btn:focus-visible { outline: 1px solid rgba(122,162,247,.5); outline-offset: -1px; }
+    /* Trace mode tints the slider + active label red */
+    #mode-toggle.is-trace .mode-slider {
+      background: rgba(247,118,142,.15);
+      border-color: rgba(247,118,142,.4);
     }
+    #mode-toggle.is-trace .mode-btn.active { color: var(--red); }
 
     /* ── Agent trace panel (for Agentic mode responses) ── */
     .agent-trace {
@@ -540,6 +571,114 @@
 
     .system-node { cursor: pointer; }
 
+    /* ── Trace mode response panel ── */
+    .trace-response { display: flex; flex-direction: column; gap: 14px; }
+    .trace-origin-line {
+      display: flex; align-items: center; gap: 8px;
+      font-family: var(--font-code); font-size: 12px;
+      padding: 8px 11px; border-radius: 6px;
+      background: rgba(247,118,142,.08);
+      border: 1px solid rgba(247,118,142,.25);
+      color: var(--text-1);
+    }
+    .trace-origin-tag {
+      font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase;
+      color: var(--red); font-family: var(--font-ui); font-weight: 600;
+    }
+    .trace-origin-path { color: var(--red); cursor: pointer; }
+    .trace-origin-path:hover { text-decoration: underline; }
+    .trace-section { display: flex; flex-direction: column; gap: 6px; }
+    .trace-section-h {
+      font-family: var(--font-ui); font-size: 10.5px; font-weight: 600;
+      color: var(--text-3); text-transform: uppercase; letter-spacing: .08em;
+    }
+    .trace-summary { font-size: 13px; line-height: 1.65; color: var(--text-1); }
+    .trace-path-row {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+      font-family: var(--font-code); font-size: 11.5px;
+    }
+    .trace-path-chip {
+      padding: 3px 8px; border-radius: 3px;
+      background: rgba(247,118,142,.12); color: var(--red);
+      border: 1px solid rgba(247,118,142,.3);
+      cursor: pointer; transition: background .12s, border-color .12s;
+    }
+    .trace-path-chip:hover {
+      background: rgba(247,118,142,.22); border-color: rgba(247,118,142,.5);
+    }
+    .trace-path-arrow { color: var(--text-3); font-size: 11px; }
+    .trace-related-list { display: flex; flex-direction: column; gap: 6px; }
+    .trace-related-item {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 8px 11px; border-radius: 5px;
+      background: rgba(255,255,255,.02);
+      border: 1px solid var(--border);
+      transition: background .12s, border-color .12s;
+    }
+    .trace-related-item:hover { background: var(--bg-hover); border-color: var(--border-md); }
+    .trace-related-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; margin-top: 6px; }
+    .trace-related-dot.high   { background: var(--red); }
+    .trace-related-dot.medium { background: var(--yellow); }
+    .trace-related-dot.low    { background: var(--text-3); }
+    .trace-related-body { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+    .trace-related-path { font-family: var(--font-code); font-size: 11.5px; color: var(--text-1); cursor: pointer; }
+    .trace-related-path:hover { color: var(--blue); text-decoration: underline; }
+    .trace-related-reason { font-family: var(--font-ui); font-size: 11.5px; color: var(--text-2); line-height: 1.5; }
+    .trace-related-sig {
+      font-family: var(--font-ui); font-size: 9.5px; font-weight: 600;
+      letter-spacing: .06em; text-transform: uppercase;
+      padding: 2px 6px; border-radius: 3px; flex-shrink: 0; margin-top: 2px;
+    }
+    .trace-related-sig.high   { color: var(--red);    background: rgba(247,118,142,.1);  border: 1px solid rgba(247,118,142,.25); }
+    .trace-related-sig.medium { color: var(--yellow); background: rgba(224,175,104,.1);  border: 1px solid rgba(224,175,104,.25); }
+    .trace-related-sig.low    { color: var(--text-2); background: rgba(255,255,255,.04); border: 1px solid var(--border); }
+    .trace-connections { display: flex; flex-direction: column; gap: 5px; font-family: var(--font-code); font-size: 11.5px; }
+    .trace-conn-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; color: var(--text-2); }
+    .trace-conn-from, .trace-conn-to { color: var(--text-1); cursor: pointer; }
+    .trace-conn-from:hover, .trace-conn-to:hover { color: var(--blue); text-decoration: underline; }
+    .trace-conn-kind {
+      font-family: var(--font-ui); font-size: 9.5px; font-weight: 600;
+      letter-spacing: .06em; text-transform: uppercase;
+      color: var(--cyan); background: rgba(125,207,255,.08);
+      border: 1px solid rgba(125,207,255,.22);
+      padding: 1px 5px; border-radius: 3px;
+    }
+    .trace-conn-detail {
+      width: 100%; margin-left: 0;
+      font-family: var(--font-ui); font-size: 11.5px;
+      color: var(--text-3); line-height: 1.5;
+    }
+
+    /* Architecture trace highlight overlays applied to D3 nodes */
+    .an.trace-origin circle, .an.trace-path circle {
+      fill: var(--red) !important; stroke: var(--red) !important; stroke-width: 2.5 !important;
+    }
+    .an.trace-origin text tspan, .an.trace-path text tspan {
+      fill: var(--red) !important; font-weight: 600 !important;
+    }
+    .an.trace-related circle {
+      fill: var(--yellow) !important; stroke: var(--yellow) !important; stroke-width: 2 !important;
+    }
+    .an.trace-related text tspan { fill: var(--yellow) !important; font-weight: 600 !important; }
+    .arch-links path.al.trace-edge {
+      stroke: var(--red) !important; stroke-width: 2 !important; stroke-dasharray: 4 3;
+    }
+
+    #arch-trace-hint {
+      display: none;
+      margin-left: 8px;
+      font-family: var(--font-ui); font-size: 11px; font-weight: 500;
+      color: var(--red);
+      background: rgba(247,118,142,.10);
+      border: 1px solid rgba(247,118,142,.32);
+      border-radius: 4px;
+      padding: 3px 9px;
+      letter-spacing: .02em;
+      pointer-events: none;
+    }
+    body.has-trace-mode #arch-trace-hint { display: inline-flex; align-items: center; }
+    body.has-trace-mode .an[data-type="file"] { cursor: crosshair; }
+
     /* ── System tab ── */
     #layer-system { background: var(--bg-main); }
     #system-toolbar {
@@ -662,9 +801,11 @@
     <div id="chat-header">
       <h2>Assistant</h2>
       <div id="mode-toggle" role="tablist" aria-label="Chat mode">
-        <button class="mode-btn active" data-mode="qa">Q&amp;A</button>
-        <button class="mode-btn" data-mode="narrative">Narrative</button>
-        <button class="mode-btn" data-mode="agent">Agentic</button>
+        <span class="mode-slider" aria-hidden="true"></span>
+        <button class="mode-btn active" type="button" role="tab" data-mode="qa">Q&amp;A</button>
+        <button class="mode-btn" type="button" role="tab" data-mode="narrative">Narrative</button>
+        <button class="mode-btn" type="button" role="tab" data-mode="agent">Agentic</button>
+        <button class="mode-btn" type="button" role="tab" data-mode="trace">Trace</button>
       </div>
       <button id="reindex-btn" title="Force re-index this repo" style="margin-left:auto;font-size:11px;padding:2px 9px;border-radius:10px;background:rgba(158,206,106,.08);color:var(--green);border:1px solid rgba(158,206,106,.2);cursor:pointer;" onclick="forceReindex()">↺ Re-index</button>
     </div>
@@ -699,6 +840,7 @@
         <button class="arch-btn" onclick="archExpandAll()">Expand all</button>
         <button class="arch-btn" onclick="archCollapseAll()">Collapse all</button>
         <button class="arch-btn" onclick="resetArchZoom()">Reset zoom</button>
+        <span id="arch-trace-hint" aria-live="polite">⤬ Trace mode · click a file to re-analyze impact</span>
       </div>
       <svg id="arch-svg"></svg>
     </div>
@@ -1063,6 +1205,12 @@ const THINKING_PHRASES_BY_MODE = {
     "Planning tool calls…",
     "Exploring files and symbols…",
     "Synthesizing grounded findings…",
+  ],
+  trace: [
+    "Identifying the target file…",
+    "Tracing dependents and callers…",
+    "Ranking impact significance…",
+    "Building the consequence map…",
   ],
 };
 
@@ -1750,6 +1898,185 @@ function agentRender(data, bubble) {
   }
 }
 
+async function traceSend(text, ctx) {
+  const body = { question: text };
+  if (ctx?.originFile) body.origin_file = ctx.originFile;
+  const res = await fetch(`${API}/trace_impact/${encodeURIComponent(REPO_ID)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal: ctx?.signal,
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    const d = data.detail;
+    const msg = typeof d === "string" ? d : (d && d.message) ? d.message : "Trace failed";
+    const err = new Error(msg);
+    if (d && d.raw) err.raw = d.raw;
+    throw err;
+  }
+  return data;
+}
+
+function traceRender(data, bubble) {
+  const origin = data.origin_file || "";
+  const primaryPath = Array.isArray(data.primary_path) ? data.primary_path : [];
+  const relatedFiles = Array.isArray(data.related_files) ? data.related_files : [];
+  const connections = Array.isArray(data.connections) ? data.connections : [];
+  const summary = data.summary || "";
+  const citations = (data.citations || []).map(c => ({
+    path: c.file_path, start_line: c.start_line, end_line: c.end_line || c.start_line,
+  }));
+
+  bubble.innerHTML = "";
+  const wrap = document.createElement("div");
+  wrap.className = "trace-response";
+  bubble.appendChild(wrap);
+
+  if (origin) {
+    const head = document.createElement("div");
+    head.className = "trace-origin-line";
+    const tag = document.createElement("span");
+    tag.className = "trace-origin-tag"; tag.textContent = "Origin";
+    const path = document.createElement("span");
+    path.className = "trace-origin-path"; path.textContent = origin;
+    path.addEventListener("click", () => openCodeViewer(origin, null));
+    head.append(tag, path);
+    wrap.appendChild(head);
+  }
+
+  if (primaryPath.length) {
+    const sec = document.createElement("div");
+    sec.className = "trace-section";
+    const h = document.createElement("div");
+    h.className = "trace-section-h"; h.textContent = "Primary impact path";
+    const row = document.createElement("div");
+    row.className = "trace-path-row";
+    primaryPath.forEach((fp, i) => {
+      if (i > 0) {
+        const arrow = document.createElement("span");
+        arrow.className = "trace-path-arrow"; arrow.textContent = "→";
+        row.appendChild(arrow);
+      }
+      const chip = document.createElement("span");
+      chip.className = "trace-path-chip";
+      chip.title = fp;
+      chip.textContent = fp.split("/").pop();
+      chip.addEventListener("click", () => openCodeViewer(fp, null));
+      row.appendChild(chip);
+    });
+    sec.append(h, row);
+    wrap.appendChild(sec);
+  }
+
+  if (summary) {
+    const sec = document.createElement("div");
+    sec.className = "trace-section";
+    const h = document.createElement("div");
+    h.className = "trace-section-h"; h.textContent = "Consequences";
+    const body = document.createElement("div");
+    body.className = "trace-summary";
+    body.innerHTML = formatAnswer(summary, citations);
+    body.querySelectorAll(".inline-cite").forEach(chip => {
+      chip.addEventListener("click", () =>
+        openCodeViewer(chip.dataset.path, +chip.dataset.start, +chip.dataset.end));
+    });
+    sec.append(h, body);
+    wrap.appendChild(sec);
+  }
+
+  if (relatedFiles.length) {
+    const sec = document.createElement("div");
+    sec.className = "trace-section";
+    const h = document.createElement("div");
+    h.className = "trace-section-h"; h.textContent = "Other affected files";
+    const list = document.createElement("div");
+    list.className = "trace-related-list";
+    relatedFiles.forEach(rf => {
+      const item = document.createElement("div");
+      item.className = "trace-related-item";
+      const dot = document.createElement("span");
+      dot.className = `trace-related-dot ${rf.significance || "medium"}`;
+      const body = document.createElement("div");
+      body.className = "trace-related-body";
+      const path = document.createElement("span");
+      path.className = "trace-related-path";
+      path.textContent = rf.file_path;
+      path.addEventListener("click", () => openCodeViewer(rf.file_path, null));
+      body.appendChild(path);
+      if (rf.reason) {
+        const reason = document.createElement("span");
+        reason.className = "trace-related-reason";
+        reason.textContent = rf.reason;
+        body.appendChild(reason);
+      }
+      const sig = document.createElement("span");
+      sig.className = `trace-related-sig ${rf.significance || "medium"}`;
+      sig.textContent = rf.significance || "medium";
+      item.append(dot, body, sig);
+      list.appendChild(item);
+    });
+    sec.append(h, list);
+    wrap.appendChild(sec);
+  }
+
+  if (connections.length) {
+    const sec = document.createElement("div");
+    sec.className = "trace-section";
+    const h = document.createElement("div");
+    h.className = "trace-section-h"; h.textContent = "Connections";
+    const list = document.createElement("div");
+    list.className = "trace-connections";
+    connections.forEach(cn => {
+      const row = document.createElement("div");
+      row.className = "trace-conn-row";
+      const from = document.createElement("span");
+      from.className = "trace-conn-from"; from.textContent = (cn.from || "").split("/").pop(); from.title = cn.from;
+      from.addEventListener("click", () => openCodeViewer(cn.from, null));
+      const arrow = document.createElement("span");
+      arrow.className = "trace-path-arrow"; arrow.textContent = "→";
+      const to = document.createElement("span");
+      to.className = "trace-conn-to"; to.textContent = (cn.to || "").split("/").pop(); to.title = cn.to;
+      to.addEventListener("click", () => openCodeViewer(cn.to, null));
+      const kind = document.createElement("span");
+      kind.className = "trace-conn-kind"; kind.textContent = cn.kind || "calls";
+      row.append(from, arrow, to, kind);
+      if (cn.detail) {
+        const detail = document.createElement("span");
+        detail.className = "trace-conn-detail"; detail.textContent = cn.detail;
+        row.appendChild(detail);
+      }
+      list.appendChild(row);
+    });
+    sec.append(h, list);
+    wrap.appendChild(sec);
+  }
+
+  if (citations.length) {
+    const chips = document.createElement("div");
+    chips.className = "citations";
+    citations.forEach(c => {
+      const chip = document.createElement("span");
+      chip.className = "cite-chip";
+      const endStr = c.end_line !== c.start_line ? `-${c.end_line}` : "";
+      chip.textContent = `${c.path}:${c.start_line}${endStr}`;
+      chip.addEventListener("click", () => openCodeViewer(c.path, c.start_line, c.end_line));
+      chips.appendChild(chip);
+    });
+    wrap.appendChild(chips);
+  }
+
+  // Drive the architecture highlight + jump to the Architecture tab.
+  if (typeof window.applyTraceHighlight === "function") {
+    window.applyTraceHighlight({
+      origin,
+      primaryPath,
+      relatedFiles: relatedFiles.map(r => r.file_path),
+    });
+  }
+  if (currentLayer !== "arch") activateTab("arch");
+}
+
 const ChatModes = {
   qa: {
     id: "qa",
@@ -1772,24 +2099,63 @@ const ChatModes = {
     send: agentSend,
     render: agentRender,
   },
+  trace: {
+    id: "trace",
+    label: "Trace",
+    placeholder: "Ask how a change in one file ripples — e.g. \"if I rename foo() in api.py, what breaks?\"",
+    send: traceSend,
+    render: traceRender,
+  },
   // future modes (speech-to-speech, debate, etc.) plug in here
 };
 
 let currentMode = ChatModes.qa;
 
-function setChatMode(modeId) {
-  const mode = ChatModes[modeId];
-  if (!mode) return;
-  currentMode = mode;
-  inputEl.placeholder = mode.placeholder;
-  document.querySelectorAll(".mode-btn").forEach(btn => {
-    btn.classList.toggle("active", btn.dataset.mode === mode.id);
+function updateModeSlider() {
+  const toggle = document.getElementById("mode-toggle");
+  if (!toggle) return;
+  const slider = toggle.querySelector(".mode-slider");
+  const active = toggle.querySelector(".mode-btn.active");
+  if (!slider || !active) return;
+  // Defer one frame so font-driven layout is settled before measuring.
+  requestAnimationFrame(() => {
+    slider.style.width  = active.offsetWidth  + "px";
+    slider.style.height = active.offsetHeight + "px";
+    slider.style.transform = `translate(${active.offsetLeft}px, ${active.offsetTop}px)`;
   });
 }
 
-document.querySelectorAll(".mode-btn").forEach(btn => {
+function setChatMode(modeId) {
+  const mode = ChatModes[modeId];
+  if (!mode) return;
+  const previousId = currentMode ? currentMode.id : null;
+  currentMode = mode;
+  inputEl.placeholder = mode.placeholder;
+  document.querySelectorAll("#mode-toggle .mode-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.mode === mode.id);
+  });
+  const toggle = document.getElementById("mode-toggle");
+  if (toggle) toggle.classList.toggle("is-trace", mode.id === "trace");
+  document.body.classList.toggle("has-trace-mode", mode.id === "trace");
+  updateModeSlider();
+  // Leaving Trace mode clears any architecture highlights so they don't linger.
+  if (previousId === "trace" && mode.id !== "trace" && typeof window.clearTraceHighlight === "function") {
+    window.clearTraceHighlight();
+  }
+  // Refresh arch tooltips / cursor hints so they reflect the new mode immediately.
+  if (typeof window.archUpdate === "function") window.archUpdate();
+}
+
+document.querySelectorAll("#mode-toggle .mode-btn").forEach(btn => {
   btn.addEventListener("click", () => setChatMode(btn.dataset.mode));
 });
+
+// Position the slider on initial load and after font/layout shifts.
+updateModeSlider();
+window.addEventListener("resize", updateModeSlider);
+if (document.fonts && document.fonts.ready) {
+  document.fonts.ready.then(updateModeSlider).catch(() => {});
+}
 
 let activeController = null;
 
@@ -1807,16 +2173,21 @@ function setSendBtnState(state) {
   }
 }
 
-async function sendMessage() {
-  const text = inputEl.value.trim();
+async function sendMessage(opts = {}) {
+  // opts: { text?: string, originFile?: string, userDisplay?: string }
+  // - text:        bypass the input box (used when triggering from arch click)
+  // - originFile:  passed through to mode.send via ctx.originFile
+  // - userDisplay: HTML to show in the user bubble instead of esc(text)
+  const fromInput = opts.text == null;
+  const text = fromInput ? inputEl.value.trim() : String(opts.text).trim();
   if (!text) return;
   const mode = currentMode;
   const originalInput = inputEl.value;
-  inputEl.value = ""; inputEl.style.height = "auto";
+  if (fromInput) { inputEl.value = ""; inputEl.style.height = "auto"; }
   const controller = new AbortController();
   activeController = controller;
   setSendBtnState("stop");
-  appendMsg("user", esc(text));
+  appendMsg("user", opts.userDisplay || esc(text));
   showThinking(mode.id);
 
   const onEvent = (evt) => {
@@ -1830,9 +2201,12 @@ async function sendMessage() {
     }
   };
 
+  const ctx = { REPO_ID, API, onEvent, signal: controller.signal };
+  if (opts.originFile) ctx.originFile = opts.originFile;
+
   // Build an empty assistant bubble upfront so mode.render can populate it
   try {
-    const data = await mode.send(text, { REPO_ID, API, onEvent, signal: controller.signal });
+    const data = await mode.send(text, ctx);
     removeThinking();
     const wrap = document.createElement("div");
     wrap.className = "msg msg-assistant";
@@ -1909,6 +2283,34 @@ document.getElementById("topbar-repo").textContent = REPO_LABEL;
 
 // ── Architecture D3 ────────────────────────────────────────────────────────────
 
+// Trace-mode highlight state. Lives outside initArch so it survives the
+// placeholder->real-tree re-init and so other modes can call the helpers
+// without worrying about ordering.
+const _traceHighlight = {
+  origin: null,
+  pathSet: new Set(),
+  relatedSet: new Set(),
+};
+
+// Trigger a Trace re-analysis centered on a specific file. Called from the
+// architecture tree when the user clicks a file while Trace mode is active.
+function traceFileFromArch(filePath) {
+  if (!filePath) return;
+  if (activeController) return; // don't interrupt an in-flight request
+  if (!currentMode || currentMode.id !== "trace") return;
+  const fname = filePath.split("/").pop();
+  sendMessage({
+    text: `What is the general impact of changing \`${filePath}\`?`,
+    originFile: filePath,
+    userDisplay:
+      `<span style="display:inline-flex;align-items:center;gap:6px">` +
+      `<span style="font-size:10px;color:var(--red);font-weight:600;letter-spacing:.06em;text-transform:uppercase">Trace</span>` +
+      `<span style="font-family:var(--font-code);font-size:12px">${esc(fname)}</span>` +
+      `<span style="font-size:11px;color:var(--text-3)">— ${esc(filePath)}</span>` +
+      `</span>`,
+  });
+}
+
 function _buildArchTree(files, repoLabel) {
   const root = { id: "/", name: repoLabel || "repo", type: "folder", children: [] };
   const map = { "/": root };
@@ -1979,32 +2381,82 @@ function initArch(treeData) {
   const LANG_COLOR = { python:"#4B8BBE", javascript:"#F7DF1E", typescript:"#3178C6",
     tsx:"#3178C6", go:"#00ADD8", rust:"#CE422B", java:"#ED8B00", cpp:"#659AD2", unknown:"#6B7280" };
 
+  // Compute the set of tree-node ids whose incoming link should be drawn red,
+  // i.e. every ancestor of every highlighted file (including the file itself).
+  function _traceLinkTargetIds() {
+    const targets = new Set();
+    const highlighted = new Set();
+    if (_traceHighlight.origin) highlighted.add(_traceHighlight.origin);
+    _traceHighlight.pathSet.forEach(id => highlighted.add(id));
+    if (!highlighted.size) return targets;
+    root.each(d => {
+      if (d.data.type !== "file") return;
+      if (!highlighted.has(d.data.id)) return;
+      let cur = d;
+      while (cur && cur.parent) {
+        targets.add(cur.data.id);
+        cur = cur.parent;
+      }
+    });
+    return targets;
+  }
+
+  function _traceClassFor(d) {
+    if (!d || d.data.type !== "file") return "an";
+    if (_traceHighlight.origin && d.data.id === _traceHighlight.origin) return "an trace-origin";
+    if (_traceHighlight.pathSet.has(d.data.id)) return "an trace-path";
+    if (_traceHighlight.relatedSet.has(d.data.id)) return "an trace-related";
+    return "an";
+  }
+
   function update(src) {
     const q = (document.getElementById("arch-search")?.value || "").toLowerCase();
     tree(root);
     const nodes = root.descendants(), links = root.links();
+    const traceLinkIds = _traceLinkTargetIds();
+    const inTraceMode = currentMode && currentMode.id === "trace";
 
     const link = gLinks.selectAll(".al").data(links, d => d.target.data.id);
-    link.enter().append("path").attr("class","al")
-      .attr("fill","none").attr("stroke","rgba(255,255,255,0.07)").attr("stroke-width",1)
-      .merge(link).transition().duration(220)
+    const linkEnter = link.enter().append("path")
+      .attr("fill","none").attr("stroke-width",1);
+    const linkAll = linkEnter.merge(link);
+    linkAll
+      .attr("class", d => "al" + (traceLinkIds.has(d.target.data.id) ? " trace-edge" : ""))
+      .attr("stroke", d => traceLinkIds.has(d.target.data.id) ? "var(--red)" : "rgba(255,255,255,0.07)");
+    linkAll.transition().duration(220)
       .attr("d", d3.linkHorizontal().x(d => d.y).y(d => d.x));
     link.exit().remove();
 
     const node = gNodes.selectAll(".an").data(nodes, d => d.data.id);
     const enter = node.enter().append("g").attr("class","an")
+      .attr("data-type", d => d.data.type)
       .attr("transform", `translate(${src.y0},${src.x0})`).style("cursor","pointer")
       .on("click", (_, d) => {
-        if (d.data.type === "file") { openCodeViewer(d.data.id, null); return; }
+        if (d.data.type === "file") {
+          // In Trace mode, clicking a file re-runs the trace centered on it
+          // instead of opening the code viewer.
+          if (currentMode && currentMode.id === "trace") {
+            traceFileFromArch(d.data.id);
+          } else {
+            openCodeViewer(d.data.id, null);
+          }
+          return;
+        }
         if (d.children) { d._children = d.children; d.children = null; }
         else { d.children = d._children; d._children = null; }
         update(d);
       });
+    enter.append("title");
     enter.append("circle").attr("r",5).attr("stroke","rgba(255,255,255,0.1)").attr("stroke-width",1);
     enter.append("rect").attr("class","an-lbg").attr("fill","var(--bg-main)").attr("rx",2).attr("ry",2);
     enter.append("text").attr("dy","0.32em").attr("font-family","var(--font-code)").attr("font-size","11px").attr("fill","var(--text-2)");
 
     const m = enter.merge(node);
+    m.attr("class", d => _traceClassFor(d));
+    m.select("title").text(d => {
+      if (d.data.type !== "file") return "";
+      return inTraceMode ? `Trace impact of ${d.data.id}` : d.data.id;
+    });
     m.transition().duration(220).attr("transform", d => `translate(${d.y},${d.x})`);
     m.select("circle").attr("fill", d =>
       d.data.type === "folder" ? (d.children ? "#6B7280" : "#374151") : (LANG_COLOR[d.data.language] || LANG_COLOR.unknown)
@@ -2091,6 +2543,50 @@ function initArch(treeData) {
     }
     update(root);
   };
+
+  // ── Trace highlight API (consumed by Trace chat mode) ────────────────────
+  function _expandAncestorsOf(targetIds) {
+    if (!targetIds || !targetIds.size) return;
+    root.each(d => {
+      if (d.data.type !== "file") return;
+      if (!targetIds.has(d.data.id)) return;
+      let cur = d.parent;
+      while (cur) {
+        if (cur._children) { cur.children = cur._children; cur._children = null; }
+        cur = cur.parent;
+      }
+    });
+  }
+
+  window.applyTraceHighlight = ({ origin, primaryPath, relatedFiles } = {}) => {
+    _traceHighlight.origin = origin || null;
+    _traceHighlight.pathSet = new Set(
+      (primaryPath || []).filter(p => p && p !== origin)
+    );
+    const primarySet = new Set(_traceHighlight.pathSet);
+    if (origin) primarySet.add(origin);
+    _traceHighlight.relatedSet = new Set(
+      (relatedFiles || []).filter(p => p && !primarySet.has(p))
+    );
+    const visibleTargets = new Set([
+      ...primarySet,
+      ..._traceHighlight.relatedSet,
+    ]);
+    _expandAncestorsOf(visibleTargets);
+    update(root);
+    setTimeout(() => fitView(), 260);
+  };
+
+  window.clearTraceHighlight = () => {
+    _traceHighlight.origin = null;
+    _traceHighlight.pathSet = new Set();
+    _traceHighlight.relatedSet = new Set();
+    update(root);
+  };
+
+  // Allow other code (e.g. mode switching) to ask the architecture view to
+  // refresh tooltips, cursor states, etc. without modifying highlight state.
+  window.archUpdate = () => update(root);
 }
 
 // Start with an empty placeholder, then load real file tree

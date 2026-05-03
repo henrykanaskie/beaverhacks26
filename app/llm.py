@@ -33,6 +33,12 @@ ROLE_CONFIG: dict[str, dict] = {
         "max_tokens": 1536,
         "api_key_env": "NANO_API_KEY",
     },
+    "trace": {
+        "model": "mistralai/mistral-nemotron",
+        "temperature": 0.15,
+        "max_tokens": 3072,
+        "api_key_env": "NANO_API_KEY",
+    },
 }
 
 # ── Pydantic models shared across endpoints ──────────────────────────────────
