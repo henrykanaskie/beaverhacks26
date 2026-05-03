@@ -15,6 +15,26 @@ INCLUDE_EXTENSIONS = {
     ".cpp",
     ".cs",
 }
+EXCLUDE_EXTENSIONS = {
+    # images
+    ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".webp", ".bmp", ".tiff",
+    # fonts
+    ".ttf", ".woff", ".woff2", ".eot", ".otf",
+    # compiled / binary
+    ".pyc", ".pyo", ".pyd", ".so", ".dll", ".exe", ".bin", ".obj", ".o",
+    ".class", ".jar", ".war", ".ear",
+    # archives
+    ".zip", ".tar", ".gz", ".bz2", ".xz", ".rar", ".7z",
+    # media
+    ".mp3", ".mp4", ".wav", ".ogg", ".avi", ".mov", ".mkv",
+    # data / lock files unlikely to help LLM understand code
+    ".lock", ".sum", ".snap",
+    # misc binary
+    ".pdf", ".doc", ".docx", ".xls", ".xlsx",
+    ".db", ".sqlite", ".sqlite3",
+    ".map",  # source maps are huge and useless as context
+}
+
 EXCLUDE_DIRS = {
     "node_modules",
     ".venv",

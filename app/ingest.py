@@ -12,7 +12,7 @@ from llama_index.core import Document
 from llama_index.core.node_parser import CodeSplitter
 from pydantic import BaseModel
 
-from constants import EXCLUDE_DIRS, INCLUDE_EXTENSIONS, LANGUAGE_MAP
+from constants import EXCLUDE_DIRS, EXCLUDE_EXTENSIONS, INCLUDE_EXTENSIONS, LANGUAGE_MAP
 from db import collection_exists, get_client, get_or_create_collection
 from deps_builder import build_dependency_graph
 from progress import (
@@ -45,6 +45,7 @@ router = APIRouter()
 
 class IndexRequest(BaseModel):
     repo_url: str
+    force: bool = False
 
 
 def validate_url(repo_url: str) -> None:
@@ -127,13 +128,17 @@ def collect_files(clone_path: str) -> list[dict]:
             continue
         if any(part in EXCLUDE_DIRS for part in file_path.parts):
             continue
-        if file_path.suffix not in INCLUDE_EXTENSIONS:
+        if file_path.suffix.lower() in EXCLUDE_EXTENSIONS:
             continue
         rel_path = file_path.relative_to(root).as_posix()
+        is_code = file_path.suffix in INCLUDE_EXTENSIONS
+        key = file_path.suffix.lower() if file_path.suffix else file_path.name.lower()
+        language = LANGUAGE_MAP.get(key, "text")
         collected.append({
             "path": str(file_path),
             "rel_path": rel_path,
-            "language": LANGUAGE_MAP[file_path.suffix],
+            "language": language,
+            "is_code": is_code,
         })
 
     if len(collected) > max_files:
@@ -158,12 +163,33 @@ def _compute_line_range(content: str, chunk_text: str, fallback_end: int) -> tup
     return start_line, end_line
 
 
+_CHUNK_LINES = 40
+_CHUNK_OVERLAP = 5
+
+
+def _text_chunks(content: str, file_info: dict) -> list[dict]:
+    """Line-based chunking for non-AST files (docs, config, etc.)."""
+    lines = content.splitlines()
+    step = _CHUNK_LINES - _CHUNK_OVERLAP
+    chunks = []
+    for i in range(0, len(lines), step):
+        block = lines[i:i + _CHUNK_LINES]
+        text = "\n".join(block)
+        if not text.strip():
+            continue
+        chunks.append({
+            "text": text,
+            "file_path": file_info["rel_path"],
+            "language": file_info["language"],
+            "is_code": file_info.get("is_code", False),
+            "start_line": i + 1,
+            "end_line": i + len(block),
+        })
+    return chunks
+
+
 def chunk_files(files: list[dict]) -> list[dict]:
-    """
-    Chunk all collected files using AST-aware splitting.
-    Returns list of { text, file_path, language, start_line, end_line }.
-    Files that fail to parse are skipped with a warning, not crashed on.
-    """
+    """AST-aware splitting for code files; line-based fallback for docs/config."""
     chunks: list[dict] = []
     for file_info in files:
         try:
@@ -172,25 +198,34 @@ def chunk_files(files: list[dict]) -> list[dict]:
             if not content.strip():
                 continue
 
-            splitter = CodeSplitter(
-                language=file_info["language"],
-                chunk_lines=40,
-                chunk_lines_overlap=5,
-                max_chars=1500,
-            )
-            doc = Document(text=content)
-            nodes = splitter.get_nodes_from_documents([doc])
+            is_code = file_info.get("is_code", False)
 
-            total_lines = len(content.splitlines())
-            for node in nodes:
-                start_line, end_line = _compute_line_range(content, node.text, total_lines)
-                chunks.append({
-                    "text": node.text,
-                    "file_path": file_info["rel_path"],
-                    "language": file_info["language"],
-                    "start_line": int(start_line),
-                    "end_line": int(end_line),
-                })
+            if is_code:
+                try:
+                    splitter = CodeSplitter(
+                        language=file_info["language"],
+                        chunk_lines=_CHUNK_LINES,
+                        chunk_lines_overlap=_CHUNK_OVERLAP,
+                        max_chars=1500,
+                    )
+                    doc = Document(text=content)
+                    nodes = splitter.get_nodes_from_documents([doc])
+                    total_lines = len(content.splitlines())
+                    for node in nodes:
+                        start_line, end_line = _compute_line_range(content, node.text, total_lines)
+                        chunks.append({
+                            "text": node.text,
+                            "file_path": file_info["rel_path"],
+                            "language": file_info["language"],
+                            "is_code": True,
+                            "start_line": int(start_line),
+                            "end_line": int(end_line),
+                        })
+                    continue
+                except Exception as e:
+                    print(f"Warning: AST split failed for {file_info['rel_path']} ({e!r}), falling back")
+
+            chunks.extend(_text_chunks(content, file_info))
         except Exception as e:
             print(f"Warning: skipping {file_info['rel_path']}: {e}")
             continue
@@ -300,7 +335,7 @@ def embed_and_store(chunks: list[dict], repo_id: str, _progress_repo: str | None
             "language": c["language"],
             "start_line": int(c["start_line"]),
             "end_line": int(c["end_line"]),
-            "content_type": "code",
+            "content_type": "code" if c.get("is_code", True) else "doc",
         } for c in batch]
 
         collection.add(
@@ -370,8 +405,11 @@ async def index_repo(request: IndexRequest, background_tasks: BackgroundTasks):
     validate_url(request.repo_url)
     repo_id = get_repo_id(request.repo_url)
 
-    # Already indexed — return immediately unless collection is empty (failed/interrupted run).
-    if collection_exists(repo_id):
+    files_json_path = f"deps/{repo_id}_files.json"
+
+    # Already indexed — only short-circuit when BOTH collection and files.json exist.
+    # If files.json is missing the previous run failed partway; fall through to re-index.
+    if not request.force and collection_exists(repo_id) and os.path.exists(files_json_path):
         collection = get_or_create_collection(repo_id)
         n = collection.count()
         if n > 0:
@@ -381,6 +419,9 @@ async def index_repo(request: IndexRequest, background_tasks: BackgroundTasks):
                 "status": "already_indexed",
                 "chunk_count": n,
             }
+
+    # Stale/partial collection — wipe so we start clean
+    if collection_exists(repo_id):
         try:
             get_client().delete_collection(repo_id)
         except Exception:
