@@ -123,7 +123,8 @@ def build_prompt(question: str, chunks: list[dict], history: list[Turn] | None =
         for chunk in chunks:
             meta = chunk["metadata"]
             language = meta.get("language", "")
-            chunks_block += f"[{meta['file_path']}:{meta['start_line']}]\n"
+            end = meta.get('end_line', meta['start_line'])
+            chunks_block += f"[{meta['file_path']}:{meta['start_line']}-{end}]\n"
             chunks_block += f"```{language}\n{chunk['text']}\n```\n\n"
         context_section = f"CONTEXT (top relevant code from the indexed repo):\n{chunks_block}"
     else:
@@ -136,7 +137,10 @@ def build_prompt(question: str, chunks: list[dict], history: list[Turn] | None =
 How to respond:
 - For greetings, thanks, or small talk, reply naturally and briefly. No citations.
 - For general programming or CS questions that don't reference this specific repo, answer from your own knowledge. No citations.
-- For questions about THIS codebase, ground every claim in the CONTEXT and cite each referenced snippet using [file_path:line_number]. Do NOT invent file paths, function names, class names, or code that doesn't appear in the CONTEXT.
+- For questions about THIS codebase, ground every claim in the CONTEXT and cite each referenced snippet INLINE using [file_path:start_line-end_line]. When referencing a function, class, or block, cite the FULL range (e.g. [src/app.py:42-78]), not just the first line. Place citations next to the claims they support.
+- Strongly prefer citing CODE files (.py, .js, .ts, .go, .rs, .java, .cpp, .cs) over docs or config files. Only cite non-code files if the question specifically asks about them.
+- Do NOT invent file paths, function names, class names, or code that doesn't appear in the CONTEXT.
+- Do NOT output JSON, step arrays, or wrap your entire answer in a code fence.
 - If the user asks a code-specific question and CONTEXT doesn't contain enough information to answer, say so plainly: "I don't have enough code context for that — try asking about a specific file or function." Don't guess.
 - Use PRIOR CONVERSATION (if present) to resolve references like "it" or "that function".
 
