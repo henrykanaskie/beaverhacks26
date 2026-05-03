@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 
 INCLUDE_EXTENSIONS = {
+    # Code
     ".py",
     ".js",
     ".ts",
@@ -14,6 +15,25 @@ INCLUDE_EXTENSIONS = {
     ".java",
     ".cpp",
     ".cs",
+    # Docs & config
+    ".md",
+    ".txt",
+    ".rst",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".ini",
+    ".cfg",
+    # Data (sampled, not fully indexed)
+    ".json",
+    ".csv",
+    # Web
+    ".html",
+    ".css",
+    # Shell / CI
+    ".sh",
+    ".bash",
+    ".dockerfile",
 }
 EXCLUDE_EXTENSIONS = {
     # images
@@ -60,7 +80,33 @@ LANGUAGE_MAP = {
     ".java": "java",
     ".cpp": "cpp",
     ".cs": "c_sharp",
+    ".md": "text",
+    ".txt": "text",
+    ".rst": "text",
+    ".yaml": "text",
+    ".yml": "text",
+    ".toml": "text",
+    ".ini": "text",
+    ".cfg": "text",
+    ".json": "text",
+    ".csv": "text",
+    ".html": "html",
+    ".css": "css",
+    ".sh": "bash",
+    ".bash": "bash",
+    ".dockerfile": "text",
 }
+
+# Extensions that support AST-aware chunking via CodeSplitter.
+# Everything else uses raw text chunking.
+AST_LANGUAGES = {
+    "python", "javascript", "typescript", "tsx", "go",
+    "rust", "java", "cpp", "c_sharp",
+}
+
+# Large data files get sampled rather than fully chunked
+DATA_EXTENSIONS = {".csv", ".json"}
+MAX_DATA_SAMPLE_CHARS = 3000
 
 
 def get_repo_id(repo_url: str) -> str:

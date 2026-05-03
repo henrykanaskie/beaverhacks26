@@ -213,9 +213,10 @@ class NarrativeRequest(BaseModel):
 
 def _retrieve_rag_chunks(repo_id: str, question: str, k: int = 5) -> list[dict]:
     """Mirror the embed -> Chroma -> rerank pipeline from query.py."""
-    from query import _get_embed_adapter, _reranker  # lazy import avoids circular load
+    from llm import get_embed_adapter
+    from query import _reranker  # lazy import avoids circular load
 
-    adapter, _ = _get_embed_adapter()
+    adapter, _ = get_embed_adapter()
     query_embedding = adapter.embed(question)
 
     collection = get_or_create_collection(repo_id)
