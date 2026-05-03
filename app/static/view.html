@@ -159,13 +159,15 @@
     #input-wrap {
       display: flex; align-items: flex-end; gap: 8px;
       background: var(--bg-active); border: 1px solid var(--border-md);
-      border-radius: 8px; padding: 8px 10px; transition: border-color .15s;
+      border-radius: 8px; padding: 12px 14px; transition: border-color .15s;
+      min-height: 70px; cursor: text;
     }
     #input-wrap:focus-within { border-color: rgba(122,162,247,.4); }
     #chat-input {
       flex: 1; background: none; border: none; outline: none;
       color: var(--text-1); font-family: var(--font-ui); font-size: 14px;
-      resize: none; max-height: 120px; scrollbar-width: thin;
+      resize: none; max-height: 200px; scrollbar-width: thin;
+      align-self: stretch;
     }
     #chat-input::placeholder { color: var(--text-3); }
     #send-btn {
@@ -617,7 +619,7 @@
     </div>
     <div id="messages"></div>
     <div id="input-area">
-      <div id="input-wrap">
+      <div id="input-wrap" onclick="document.getElementById('chat-input').focus()">
         <textarea id="chat-input" rows="1" placeholder="Ask anything about this codebase…"></textarea>
         <button id="send-btn">↑</button>
       </div>
@@ -1517,7 +1519,7 @@ async function sendMessage() {
 
 sendBtn.addEventListener("click", sendMessage);
 inputEl.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
-inputEl.addEventListener("input", () => { inputEl.style.height = "auto"; inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + "px"; });
+inputEl.addEventListener("input", () => { inputEl.style.height = "auto"; inputEl.style.height = Math.min(inputEl.scrollHeight, 200) + "px"; });
 // Set initial placeholder from the default mode
 inputEl.placeholder = currentMode.placeholder;
 
