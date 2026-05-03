@@ -217,8 +217,8 @@ def embed_and_store(chunks: list[dict], repo_id: str) -> int:
 
     embed_model = NomicEmbedding(
         api_key=os.getenv("NOMIC_API_KEY"),
-        model_name="nomic-embed-code-v1",
-        task_type="search_document",
+        model_name="nomic-embed-code",
+        document_task_type="search_document",
     )
     collection = get_or_create_collection(repo_id)
     total_stored = 0
