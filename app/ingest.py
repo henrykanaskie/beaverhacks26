@@ -5,6 +5,7 @@ import shutil
 import stat
 import subprocess
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
@@ -255,62 +256,81 @@ def _sample_data_file(content: str, file_info: dict) -> list[dict]:
     }]
 
 
-def chunk_files(files: list[dict]) -> list[dict]:
+def _chunk_one_file(file_info: dict) -> list[dict]:
+    """Chunk a single file. Pure function — safe to run concurrently across files.
+
+    Returns [] on read/parse failure (logged). No shared mutable state, no
+    progress writes — callers aggregate the per-file lists.
+    """
+    try:
+        with open(file_info["path"], "r", encoding="utf-8", errors="ignore") as f:
+            content = f.read()
+        if not content.strip():
+            return []
+
+        ext = Path(file_info["path"]).suffix
+        language = file_info["language"]
+
+        # Large data files → sample instead of full chunking
+        if ext in DATA_EXTENSIONS and len(content) > MAX_DATA_SAMPLE_CHARS:
+            return _sample_data_file(content, file_info)
+
+        # AST-aware chunking for supported code languages
+        if language in AST_LANGUAGES:
+            try:
+                splitter = CodeSplitter(
+                    language=language,
+                    chunk_lines=40,
+                    chunk_lines_overlap=5,
+                    max_chars=1500,
+                )
+                doc = Document(text=content)
+                nodes = splitter.get_nodes_from_documents([doc])
+
+                total_lines = len(content.splitlines())
+                out: list[dict] = []
+                for node in nodes:
+                    start_line, end_line = _compute_line_range(content, node.text, total_lines)
+                    out.append({
+                        "text": node.text,
+                        "file_path": file_info["rel_path"],
+                        "language": language,
+                        "is_code": file_info.get("is_code", True),
+                        "start_line": int(start_line),
+                        "end_line": int(end_line),
+                    })
+                return out
+            except Exception as e:
+                print(f"AST parse failed for {file_info['rel_path']}: {e} — falling back to raw text")
+
+        # Raw text chunking (non-code files, or code files that failed AST)
+        return _raw_text_chunks(content, file_info)
+    except Exception as e:
+        print(f"Warning: skipping {file_info['rel_path']}: {e}")
+        return []
+
+
+def chunk_files(files: list[dict], max_workers: int | None = None) -> list[dict]:
     """Chunk all collected files for embedding and storage.
 
-    Three strategies:
+    Runs `_chunk_one_file` concurrently across a small thread pool. Tree-sitter
+    releases the GIL during native parsing and file I/O does too, so threads
+    scale here. `executor.map` preserves input order so the resulting chunk
+    list is deterministic — required for stable first-wins dedup in
+    `embed_and_store`.
+
+    Three strategies (per file):
     1. Sampled preview for large data files (.csv, .json)
     2. AST-aware splitting for supported code languages
     3. Raw text chunking as fallback (non-code files or AST parse failures)
     """
+    if not files:
+        return []
+    workers = max_workers or min(8, (os.cpu_count() or 4))
     chunks: list[dict] = []
-    for file_info in files:
-        try:
-            with open(file_info["path"], "r", encoding="utf-8", errors="ignore") as f:
-                content = f.read()
-            if not content.strip():
-                continue
-
-            ext = Path(file_info["path"]).suffix
-            language = file_info["language"]
-
-            # Large data files → sample instead of full chunking
-            if ext in DATA_EXTENSIONS and len(content) > MAX_DATA_SAMPLE_CHARS:
-                chunks.extend(_sample_data_file(content, file_info))
-                continue
-
-            # AST-aware chunking for supported code languages
-            if language in AST_LANGUAGES:
-                try:
-                    splitter = CodeSplitter(
-                        language=language,
-                        chunk_lines=40,
-                        chunk_lines_overlap=5,
-                        max_chars=1500,
-                    )
-                    doc = Document(text=content)
-                    nodes = splitter.get_nodes_from_documents([doc])
-
-                    total_lines = len(content.splitlines())
-                    for node in nodes:
-                        start_line, end_line = _compute_line_range(content, node.text, total_lines)
-                        chunks.append({
-                            "text": node.text,
-                            "file_path": file_info["rel_path"],
-                            "language": language,
-                            "is_code": file_info.get("is_code", True),
-                            "start_line": int(start_line),
-                            "end_line": int(end_line),
-                        })
-                    continue
-                except Exception as e:
-                    print(f"AST parse failed for {file_info['rel_path']}: {e} — falling back to raw text")
-
-            # Raw text chunking (non-code files, or code files that failed AST)
-            chunks.extend(_raw_text_chunks(content, file_info))
-        except Exception as e:
-            print(f"Warning: skipping {file_info['rel_path']}: {e}")
-            continue
+    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="chunk") as ex:
+        for file_chunks in ex.map(_chunk_one_file, files):
+            chunks.extend(file_chunks)
     return chunks
 
 
@@ -451,14 +471,43 @@ def _run_pipeline(repo_id: str, repo_url: str) -> None:
         files = collect_files(clone_path)
         set_progress(repo_id, total_files=len(files), percent=25)
 
-        set_progress(repo_id, stage="chunking", percent=30, message="Chunking source...")
-        chunks = chunk_files(files)
+        # Branch parallelism: chunk+embed runs concurrently with dep graph build.
+        # Both consume `files` read-only and write disjoint outputs (Chroma vs
+        # deps/{repo_id}_deps.json). The dep graph branch shadows under embedding
+        # on most repos. Only the chunk/embed branch sets `stage` to avoid
+        # user-visible label flapping.
+        with ThreadPoolExecutor(max_workers=2, thread_name_prefix="branch") as branches:
+            def _chunk_embed_branch() -> int:
+                set_progress(repo_id, stage="chunking", percent=30, message="Chunking source...")
+                chunks = chunk_files(files)
+                set_progress(repo_id, stage="embedding", percent=40, message="Embedding chunks...")
+                return embed_and_store(chunks, repo_id, _progress_repo=repo_id)
 
-        set_progress(repo_id, stage="embedding", percent=40, message="Embedding chunks...")
-        chunk_count = embed_and_store(chunks, repo_id, _progress_repo=repo_id)
+            def _deps_branch() -> None:
+                build_dependency_graph(files, clone_path, repo_id)
 
-        set_progress(repo_id, stage="finalizing", percent=96, message="Building dep graph...")
-        build_dependency_graph(files, clone_path, repo_id)
+            chunk_future = branches.submit(_chunk_embed_branch)
+            deps_future = branches.submit(_deps_branch)
+
+            # Drain both futures, then re-raise the first error so a failure in
+            # one branch isn't silently lost while the other completes.
+            chunk_err: BaseException | None = None
+            deps_err: BaseException | None = None
+            chunk_count = 0
+            try:
+                chunk_count = chunk_future.result()
+            except BaseException as e:
+                chunk_err = e
+            try:
+                deps_future.result()
+            except BaseException as e:
+                deps_err = e
+            if chunk_err is not None:
+                raise chunk_err
+            if deps_err is not None:
+                raise deps_err
+
+        set_progress(repo_id, stage="finalizing", percent=96, message="Finalizing...")
         os.makedirs("deps", exist_ok=True)
         with open(f"deps/{repo_id}_files.json", "w", encoding="utf-8") as fh:
             json.dump([f["rel_path"] for f in files], fh)

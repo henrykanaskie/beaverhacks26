@@ -230,7 +230,21 @@ async function loadRecentProjects() {
         `<a href="${href}">` +
           `<span class="name">${escapeHtml(deriveProjectName(p.repo_url, p.repo_id, p.display_name))}</span>` +
           `<span class="rel">${escapeHtml(relTime(p.indexed_at))}</span>` +
-        `</a>`;
+        `</a>` +
+        `<button class="del-btn" title="Delete" data-id="${escapeHtml(p.repo_id)}">✕</button>`;
+      li.querySelector(".del-btn").addEventListener("click", async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        try {
+          const res = await fetch(`${API}/projects/${encodeURIComponent(p.repo_id)}`, { method: "DELETE" });
+          if (res.ok) {
+            li.remove();
+            if (!ul.children.length) empty.hidden = false;
+          } else {
+            console.error("Failed to delete project on the server.");
+          }
+        } catch (err) { console.error("Error deleting project:", err); }
+      });
       ul.appendChild(li);
     }
   } catch (e) { /* silent */ }
