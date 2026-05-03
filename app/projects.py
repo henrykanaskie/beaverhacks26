@@ -6,6 +6,7 @@ from urllib.parse import urlparse
 
 from fastapi import APIRouter
 from db import get_client
+from progress import INDEXING_PROGRESS, PROGRESS_LOCK
 
 REGISTRY_PATH = "deps/projects.json"
 _LOCK = Lock()
@@ -124,6 +125,19 @@ def delete_project(repo_id: str):
     return {"status": "deleted", "repo_id": repo_id}
 
 
+def _get_indexing_status(repo_id: str) -> str:
+    """Return 'indexing', 'error', or 'ready' based on in-memory progress."""
+    with PROGRESS_LOCK:
+        prog = INDEXING_PROGRESS.get(repo_id)
+    if prog is None:
+        return "ready"
+    if prog.stage == "error":
+        return "error"
+    if prog.stage == "done":
+        return "ready"
+    return "indexing"
+
+
 @router.get("/projects")
 def get_projects():
     projects = list_projects()
@@ -132,5 +146,25 @@ def get_projects():
         item = dict(p)
         item["display_name"] = _project_display_name(item)
         item["has_repo_url"] = bool((item.get("repo_url") or "").strip())
+        item["status"] = _get_indexing_status(item["repo_id"])
         enriched.append(item)
+
+    # Include in-flight indexing jobs not yet in the registry
+    known_ids = {p["repo_id"] for p in enriched}
+    with PROGRESS_LOCK:
+        for repo_id, prog in INDEXING_PROGRESS.items():
+            if repo_id in known_ids:
+                continue
+            if prog.stage in ("done", "error"):
+                continue
+            enriched.insert(0, {
+                "repo_id": repo_id,
+                "repo_url": "",
+                "indexed_at": datetime.now(timezone.utc).isoformat(),
+                "chunk_count": 0,
+                "display_name": "Indexing...",
+                "has_repo_url": False,
+                "status": "indexing",
+            })
+
     return {"projects": enriched}

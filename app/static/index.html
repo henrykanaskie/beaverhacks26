@@ -133,37 +133,6 @@
     #index-btn:hover { opacity: .85; }
     #index-btn:disabled { opacity: .35; cursor: default; }
 
-    #index-status {
-      margin-top: 14px; width: 100%;
-      display: flex; flex-direction: column; gap: 6px;
-      font-family: var(--font-code); font-size: 12px; color: var(--text-2);
-      min-height: 52px;
-      opacity: 0; pointer-events: none;
-      transition: opacity .2s;
-    }
-    #index-status.active { opacity: 1; pointer-events: auto; }
-    #progress-label { display: flex; gap: 10px; align-items: baseline; }
-    #progress-stage { color: var(--text-1); text-transform: capitalize; }
-    #progress-detail {
-      color: var(--text-3);
-      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    }
-    #progress-track {
-      height: 4px; background: var(--bg-active);
-      border-radius: 3px; overflow: hidden;
-      visibility: hidden;
-    }
-    #index-status.bar-active #progress-track { visibility: visible; }
-    #progress-fill {
-      height: 100%; width: 0%;
-      background: var(--blue);
-      transition: width .3s ease;
-    }
-    #progress-pct {
-      color: var(--text-3); font-size: 11px;
-      visibility: hidden;
-    }
-    #index-status.bar-active #progress-pct { visibility: visible; }
 
     /* ── Recent projects (no card) ── */
     #recent-section { width: 100%; }
@@ -173,7 +142,14 @@
       margin-bottom: 8px; padding: 0 6px;
     }
     #recent-list { list-style: none; padding: 0; margin: 0; }
-    #recent-list li { border-radius: 6px; display: flex; align-items: center; }
+    #recent-list li {
+      border-radius: 6px; display: flex; align-items: center;
+      animation: card-slide-in .3s ease-out both;
+    }
+    @keyframes card-slide-in {
+      from { opacity: 0; transform: translateY(-8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
     #recent-list li:hover { background: var(--bg-hover); }
     #recent-list li:hover .del-btn { opacity: 1; }
     #recent-list a {
@@ -191,6 +167,78 @@
       border-radius: 4px; transition: color .15s, background .15s;
     }
     .del-btn:hover { color: #f7768e; background: rgba(247,118,142,.12); }
+
+    /* ── Progress card (indexing state) ── */
+    #recent-list li.card-indexing {
+      flex-direction: column; align-items: stretch;
+      padding: 10px 10px 8px; gap: 6px;
+      background: var(--bg-raised); border: 1px solid var(--border-md);
+      margin-bottom: 4px;
+    }
+    #recent-list li.card-indexing:hover { background: var(--bg-raised); }
+    .card-indexing .card-header {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    }
+    .card-indexing .card-name {
+      font-size: 13px; font-weight: 500; color: var(--text-1);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .card-indexing .card-stage {
+      font-size: 11px; color: var(--text-2); text-transform: capitalize;
+      font-family: var(--font-code);
+    }
+    .card-indexing .card-detail {
+      font-size: 11px; color: var(--text-3); font-family: var(--font-code);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .card-indexing .card-track {
+      height: 3px; background: var(--bg-active); border-radius: 2px; overflow: hidden;
+    }
+    .card-indexing .card-fill {
+      height: 100%; width: 0%; background: var(--blue); transition: width .3s ease;
+    }
+    .card-indexing .card-dismiss {
+      background: none; border: none; cursor: pointer;
+      font-size: 11px; color: var(--text-3); padding: 2px 5px;
+      border-radius: 3px; transition: color .15s, background .15s;
+      flex-shrink: 0;
+    }
+    .card-indexing .card-dismiss:hover { color: var(--red); background: rgba(247,118,142,.12); }
+
+    /* ── Error card ── */
+    #recent-list li.card-error {
+      flex-direction: column; align-items: stretch;
+      padding: 10px 10px 8px; gap: 6px;
+      background: rgba(247,118,142,.05); border: 1px solid rgba(247,118,142,.2);
+      margin-bottom: 4px;
+    }
+    #recent-list li.card-error:hover { background: rgba(247,118,142,.07); }
+    .card-error .card-header {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    }
+    .card-error .card-name {
+      font-size: 13px; font-weight: 500; color: var(--red);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .card-error .card-error-msg {
+      font-size: 11px; color: var(--red); font-family: var(--font-code);
+      opacity: .8;
+    }
+    .card-error .card-retry {
+      background: none; border: 1px solid rgba(247,118,142,.3); cursor: pointer;
+      font-size: 11px; color: var(--red); padding: 3px 8px;
+      border-radius: 4px; transition: background .15s;
+    }
+    .card-error .card-retry:hover { background: rgba(247,118,142,.12); }
+
+    /* ── Highlight flash for already-indexed ── */
+    @keyframes card-flash {
+      0%, 100% { background: transparent; }
+      50% { background: rgba(122,162,247,.15); }
+    }
+    #recent-list li.card-highlight {
+      animation: card-flash .6s ease 2;
+    }
 
     #index-error {
       margin-top: 14px; width: 100%; padding: 10px 12px;
@@ -290,14 +338,6 @@
       <button id="index-btn" onclick="startIndexing()">Index repo</button>
     </div>
 
-    <div id="index-status">
-      <div id="progress-label">
-        <span id="progress-stage"></span>
-        <span id="progress-detail"></span>
-      </div>
-      <div id="progress-track"><div id="progress-fill"></div></div>
-      <div id="progress-pct">0%</div>
-    </div>
     <div id="index-error" hidden></div>
   </section>
 
