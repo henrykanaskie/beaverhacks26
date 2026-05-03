@@ -14,7 +14,7 @@ Run from the `/app/` directory unless stated otherwise. Replace `{repo_id}` with
 python -c "import hashlib; print(hashlib.md5(b'https://github.com/pallets/flask').hexdigest())"
 
 # Start the server in the background for endpoint tests
-uvicorn main:app --reload
+./run_dev.sh
 ```
 
 ---
@@ -25,10 +25,10 @@ uvicorn main:app --reload
 
 | # | Test | Expected result |
 |---|------|----------------|
-| 1 | `python -c "import fastapi, chromadb, git, llama_index, sentence_transformers, dotenv"` | Exits 0, no ImportError |
-| 2 | `python -c "from sentence_transformers import CrossEncoder; CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')"` with WiFi disabled | Loads from cache, no network call |
+| 1 | `python -c "import fastapi, chromadb, llama_index, transformers, torch, dotenv"` | Exits 0, no ImportError |
+| 2 | `python -c "from transformers import AutoModel; AutoModel.from_pretrained('Salesforce/codet5p-110m-embedding', trust_remote_code=True)"` with WiFi disabled | Loads from cache, no network call |
 | 3 | Check directories exist: `ls app/deps`, `ls app/clones`, `ls app/static` | All three exist |
-| 4 | Check `.env` file contents | Contains 4 placeholder vars, no real keys committed |
+| 4 | Check `.env` file contents | Contains `NVIDIA_API_KEY`, `MAX_FILES_PER_REPO`, `CLONE_TIMEOUT_SECONDS` — no real keys committed |
 | 5 | `python -c "import voyageai"` and `python -c "import openai"` | Both should fail — those libs must NOT be installed |
 | 6 | All stub `.py` files exist in `/app/` | `main.py`, `ingest.py`, `query.py`, `files.py`, `trace.py`, `speech.py` |
 
@@ -38,7 +38,7 @@ uvicorn main:app --reload
 
 | # | Test | Expected result |
 |---|------|----------------|
-| 1 | `uvicorn main:app --reload` | Starts without error on port 8000 |
+| 1 | `./run_dev.sh` | Starts without error on port 8000 |
 | 2 | `curl http://localhost:8000/health` | `{"status":"ok"}` with HTTP 200 |
 | 3 | `curl -I -X OPTIONS http://localhost:8000/health -H "Origin: http://example.com"` | Response headers contain `Access-Control-Allow-Origin: *` |
 | 4 | `curl http://localhost:8000/` | Serves static `index.html` (or 404 if file empty — acceptable until FE-01) |
@@ -143,10 +143,10 @@ After indexing flask:
 | 2 | `from db import get_or_create_collection; get_or_create_collection(repo_id).count()` | `> 0`, equals returned count |
 | 3 | Inspect a stored doc: `collection.peek(1)["metadatas"][0]` | Contains all 5 fields: `file_path`, `language`, `start_line`, `end_line`, `content_type` |
 | 4 | Re-run with same chunks | Same IDs; Chroma upserts (no duplicates); count unchanged |
-| 5 | Code review: confirm `task_type="search_document"` in NomicEmbedding init | Present, not `search_query` |
+| 5 | Code review: confirm `task_type="search_document"` in Salesforce/codet5p-110m-Embedding init | Present, not `search_query` |
 | 6 | Code review: batch loop uses `batch_size = 128` | Present |
-| 7 | Mock NomicEmbedding to throw rate-limit error twice then succeed | Function retries with backoff and ultimately succeeds |
-| 8 | With invalid `NOMIC_API_KEY` | Function raises an exception (after retries) — does not store partial data silently |
+| 7 | Mock Salesforce/codet5p-110m-Embedding to throw rate-limit error twice then succeed | Function retries with backoff and ultimately succeeds |
+| 8 | With invalid `Salesforce/codet5p-110m-_API_KEY` | Function raises an exception (after retries) — does not store partial data silently |
 
 ---
 
@@ -181,7 +181,7 @@ After indexing flask:
 | 5 | `POST /query` with unknown repo_id | 404 |
 | 6 | `POST /query {"question": "asdfqwerzzz nothing matches"}` | Returns gracefully (chunks may all have low scores; no crash) |
 | 7 | Code review: `_reranker = CrossEncoder(...)` at module level (not inside handler) | Confirmed |
-| 8 | Code review: `task_type="search_query"` in NomicEmbedding for queries | Confirmed (NOT `search_document`) |
+| 8 | Code review: `task_type="search_query"` in Salesforce/codet5p-110m-Embedding for queries | Confirmed (NOT `search_document`) |
 | 9 | Time first query vs second query | Comparable (no model download on second; reranker is cached) |
 
 ---
@@ -214,7 +214,7 @@ After indexing flask:
 | 4 | `POST /trace` with unknown repo_id | 404 "Repo not indexed" |
 | 5 | `POST /trace` on a repo where dep file was deleted | 404 "Dependency graph not found..." |
 | 6 | Time the request | <50ms |
-| 7 | Code review: no Chroma/Nomic/Nemotron calls in `trace.py` | Confirmed |
+| 7 | Code review: no Chroma/Salesforce/codet5p-110m-/Nemotron calls in `trace.py` | Confirmed |
 
 ---
 
@@ -406,7 +406,7 @@ print("OK")
 
 Single happy-path run after all tasks implemented:
 
-1. Start server: `uvicorn main:app --reload`
+1. Start server: `./run_dev.sh`
 2. Open `http://localhost:8000`
 3. Index `https://github.com/pallets/flask` — wait for completion
 4. Browse file tree, click `src/flask/app.py`
