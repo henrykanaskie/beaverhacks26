@@ -2679,7 +2679,7 @@ Collapse/expand behavior:
            oninput="archSearch(this.value)">
     <button onclick="archExpandAll()">Expand all</button>
     <button onclick="archCollapseAll()">Collapse all</button>
-    <button onclick="resetArchZoom()">Reset zoom</button>
+    <button onclick="resetArchZoom()">Center</button>
   </div>
   <svg id="arch-svg"></svg>
 </div>

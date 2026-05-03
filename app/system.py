@@ -271,7 +271,7 @@ Respond with ONLY a single JSON object (no prose, no code fences):
       "narration": "<1-3 short sentences; may include `inline code`>",
       "highlight": ["<component id>", ...],
       "animate": {{ "edge": "<edge id>", "label": "<short>", "direction": "forward" | "reverse" }} | null,
-      "citations": [{{ "file_path": "<path>", "start_line": <int> }}]
+      "citations": [{{ "file_path": "<path>", "start_line": <int>, "end_line": <int> }}]
     }}
   ]
 }}
@@ -285,6 +285,8 @@ Guidelines:
   way along the same edge (e.g., API response, DB query result, LLM returning tokens,
   cache hit). Default to "forward" if unsure.
 - Include at least one citation per step when the step is about specific code; otherwise [].
+- For each citation, include both start_line AND end_line covering the full relevant block (function, class, etc.), not just one line.
+- Strongly prefer citing code files (.py, .js, .ts, etc.) over documentation or config files.
 - Do NOT invent components, edges, or files outside the provided diagram/context.
 
 SYSTEM DIAGRAM:
@@ -432,11 +434,11 @@ Respond with ONLY a single JSON object, no prose, no code fences:
 {{
   "deep_dive": "<2-4 short paragraphs explaining this component's internals and role in the current flow. You may use `inline code`. Target ~120-220 words.>",
   "involved_files": [
-    {{ "file_path": "<relative path>", "role": "<short role>", "start_line": <int> }}
+    {{ "file_path": "<relative path>", "role": "<short role>", "start_line": <int>, "end_line": <int> }}
   ],
   "tools": ["<external lib or framework name>", ...],
   "citations": [
-    {{ "file_path": "<path>", "start_line": <int> }}
+    {{ "file_path": "<path>", "start_line": <int>, "end_line": <int> }}
   ]
 }}
 
@@ -510,6 +512,11 @@ def post_zoom(repo_id: str, request: ZoomRequest):
             ref["start_line"] = int(sl) if sl is not None else 1
         except Exception:
             ref["start_line"] = 1
+        el = obj.get("end_line")
+        try:
+            ref["end_line"] = int(el) if el is not None else ref["start_line"]
+        except Exception:
+            ref["end_line"] = ref["start_line"]
         return ref
 
     result = {

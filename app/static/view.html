@@ -1032,6 +1032,13 @@ function codeLayerId(filePath) {
 async function openCodeViewer(filePath, startLine, endLine) {
   const targetLine = startLine || null;
   endLine = endLine || startLine;
+
+  // Resolve bare filenames (e.g. "main.py") against the known file list
+  if (!filePath.includes("/") && window.__filesList) {
+    const match = window.__filesList.find(f => f === filePath || f.endsWith("/" + filePath));
+    if (match) filePath = match;
+  }
+
   let file = FILES[filePath];
   if (!file && REPO_ID) {
     try {
@@ -1092,7 +1099,7 @@ async function openCodeViewer(filePath, startLine, endLine) {
     const end = endLine || targetLine;
     for (let ln = targetLine; ln <= end; ln++) {
       const row = linesEl.querySelector(`[data-line="${ln}"]`);
-      if (row) row.classList.add("line-hl");
+      if (row && row.querySelector(".line-content")?.textContent.trim()) row.classList.add("line-hl");
     }
   }
 
@@ -1382,6 +1389,17 @@ function formatAnswer(text, citations) {
   // path arrives already HTML-escaped from esc(text) above, so unescape before re-escaping into attrs
   html = html.replace(/\[([^\]\n]+):(\d+)(?:-(\d+))?\]/g, (match, escapedPath, start, end) => {
     const filePath = escapedPath.replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>');
+    const s = parseInt(start, 10);
+    const e = end ? parseInt(end, 10) : s;
+    const endStr = e !== s ? `-${e}` : '';
+    const fname = esc(filePath.split('/').pop());
+    return `<span class="cite-chip inline-cite" data-path="${esc(filePath)}" data-start="${s}" data-end="${e}">${fname}:${s}${endStr}</span>`;
+  });
+  // Bare (un-bracketed) file:line or file:start-end references — e.g. main.py:13, main.py:22-25
+  const _citeExt = /\.(py|js|ts|tsx|jsx|go|rs|java|cpp|cs)$/i;
+  html = html.replace(/(?<!["\w/])([a-zA-Z0-9_/.\\-]+\.\w+):(\d+)(?:-(\d+))?/g, (match, rawPath, start, end) => {
+    if (!_citeExt.test(rawPath)) return match;
+    const filePath = rawPath.replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>');
     const s = parseInt(start, 10);
     const e = end ? parseInt(end, 10) : s;
     const endStr = e !== s ? `-${e}` : '';
@@ -2596,6 +2614,7 @@ initArch({ id: "/", name: REPO_LABEL, type: "folder", children: [] });
     const res = await fetch(`${API}/files/${encodeURIComponent(REPO_ID)}`);
     if (res.ok) {
       const data = await res.json();
+      window.__filesList = data.files || [];
       initArch(_buildArchTree(data.files, REPO_LABEL));
     }
   } catch (_) { /* arch stays empty — not critical */ }
