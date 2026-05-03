@@ -18,8 +18,6 @@ async function startIndexing() {
 
   document.getElementById("index-btn").disabled = true;
   document.getElementById("index-error").hidden = true;
-  document.getElementById("index-status").hidden = false;
-  document.getElementById("status-text").textContent = "Cloning and indexing...";
 
   try {
     const res = await fetch(`${API}/index`, {
@@ -37,27 +35,46 @@ async function startIndexing() {
     if (data.status === "already_indexed") {
       onIndexingComplete(repoId, data.chunk_count);
     } else {
-      pollStatus(repoId);
+      pollProgress(repoId);
     }
   } catch (err) {
     showError(err.message);
   }
 }
 
-function pollStatus(repoId) {
-  document.getElementById("status-text").textContent = "Embedding chunks...";
+
+function pollProgress(repoId) {
+  const fill   = document.getElementById("progress-fill");
+  const pctEl  = document.getElementById("progress-pct");
+  const stage  = document.getElementById("progress-stage");
+  const detail = document.getElementById("progress-detail");
+  const status = document.getElementById("index-status");
+  if (stage) stage.textContent = "";
+  if (detail) detail.textContent = "";
+  if (fill) fill.style.width = "0%";
+  status.classList.remove("bar-active");
+  status.classList.add("active");
+
   const interval = setInterval(async () => {
     try {
-      const res = await fetch(`${API}/status/${repoId}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.indexed) {
-          clearInterval(interval);
-          onIndexingComplete(repoId, null);
-        }
+      const res = await fetch(`${API}/index/progress/${repoId}`);
+      if (!res.ok) return;
+      const d = await res.json();
+      const pct = d.percent ?? 0;
+      if (fill) fill.style.width = pct + "%";
+      if (pctEl) pctEl.textContent = pct + "%";
+      status.classList.add("bar-active");
+      if (stage) stage.textContent = d.stage || "";
+      if (detail) detail.textContent = d.current_file || d.message || "";
+      if (d.stage === "done") {
+        clearInterval(interval);
+        onIndexingComplete(repoId, null);
+      } else if (d.stage === "error") {
+        clearInterval(interval);
+        showError(d.error || "Indexing failed");
       }
     } catch (e) { /* keep polling */ }
-  }, 3000);
+  }, 1500);
 }
 
 function onIndexingComplete(repoId, chunkCount) {
@@ -70,7 +87,8 @@ function showError(msg) {
   const el = document.getElementById("index-error");
   el.textContent = msg;
   el.hidden = false;
-  document.getElementById("index-status").hidden = true;
+  const s = document.getElementById("index-status");
+  s.classList.remove("active", "bar-active");
   document.getElementById("index-btn").disabled = false;
 }
 
@@ -171,3 +189,67 @@ function escapeHtml(str) {
   d.appendChild(document.createTextNode(String(str)));
   return d.innerHTML;
 }
+
+// ---------- Recent projects ----------
+
+function deriveProjectName(url) {
+  try { return new URL(url).pathname.replace(/^\/+|\.git$/g, ""); }
+  catch { return url; }
+}
+
+function relTime(iso) {
+  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (!isFinite(diff) || diff < 0) return "";
+  if (diff < 60) return "just now";
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
+
+async function loadRecentProjects() {
+  const ul = document.getElementById("recent-list");
+  const empty = document.getElementById("recent-empty");
+  if (!ul || !empty) return;
+  try {
+    const res = await fetch(`${API}/projects`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const projects = data.projects || [];
+    ul.innerHTML = "";
+    if (projects.length === 0) {
+      empty.hidden = false;
+      return;
+    }
+    empty.hidden = true;
+    for (const p of projects) {
+      const li = document.createElement("li");
+      const href = `view.html?repo_id=${encodeURIComponent(p.repo_id)}&url=${encodeURIComponent(p.repo_url)}`;
+      li.innerHTML =
+        `<a href="${href}">` +
+          `<span class="name">${escapeHtml(deriveProjectName(p.repo_url))}</span>` +
+          `<span class="rel">${escapeHtml(relTime(p.indexed_at))}</span>` +
+        `</a>`;
+      ul.appendChild(li);
+    }
+  } catch (e) { /* silent */ }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  // Reset any state the bfcache may have restored from a previous session
+  const status = document.getElementById("index-status");
+  if (status) {
+    status.classList.remove("active", "bar-active");
+    const fill  = document.getElementById("progress-fill");
+    const pctEl = document.getElementById("progress-pct");
+    const stage = document.getElementById("progress-stage");
+    const detail = document.getElementById("progress-detail");
+    if (fill) fill.style.width = "0%";
+    if (pctEl) pctEl.textContent = "0%";
+    if (stage) stage.textContent = "";
+    if (detail) detail.textContent = "";
+  }
+  document.getElementById("index-btn").disabled = false;
+  document.getElementById("index-error").hidden = true;
+
+  loadRecentProjects();
+});
