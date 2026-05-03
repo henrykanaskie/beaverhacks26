@@ -3,11 +3,37 @@ from __future__ import annotations
 
 import json
 import os
+from functools import lru_cache
 
 from llama_index.llms.nvidia import NVIDIA
 from pydantic import BaseModel
 
-MODEL = "nvidia/llama-3.3-nemotron-super-49b-v1.5"
+ROLE_CONFIG: dict[str, dict] = {
+    "qa": {
+        "model": "nvidia/llama-3.3-nemotron-super-49b-v1.5",
+        "temperature": 0.1,
+        "max_tokens": 2048,
+        "api_key_env": "NVIDIA_API_KEY",
+    },
+    "system_diagram": {
+        "model": "mistralai/mistral-nemotron",
+        "temperature": 0.1,
+        "max_tokens": 2048,
+        "api_key_env": "NANO_API_KEY",
+    },
+    "narrative": {
+        "model": "mistralai/mistral-nemotron",
+        "temperature": 0.2,
+        "max_tokens": 4096,
+        "api_key_env": "NANO_API_KEY",
+    },
+    "zoom": {
+        "model": "mistralai/mistral-nemotron",
+        "temperature": 0.1,
+        "max_tokens": 1536,
+        "api_key_env": "NANO_API_KEY",
+    },
+}
 
 # ── Pydantic models shared across endpoints ──────────────────────────────────
 
@@ -16,16 +42,10 @@ class Turn(BaseModel):
     content: str
 
 
-# ── LLM singletons ──────────────────────────────────────────────────────────
-
-_llm = None
-_agent_llm = None
-
-
-def _init_nvidia_llm(max_tokens: int, temperature: float = 0.1):
+def _init_nvidia_llm(model: str, max_tokens: int, temperature: float, api_key: str):
     llm = NVIDIA(
-        model=MODEL,
-        api_key=os.getenv("NVIDIA_API_KEY"),
+        model=model,
+        api_key=api_key,
         temperature=temperature,
         max_tokens=max_tokens,
     )
@@ -36,20 +56,67 @@ def _init_nvidia_llm(max_tokens: int, temperature: float = 0.1):
     return llm
 
 
-def get_llm():
-    """Full LLM for generating final answers (higher max_tokens)."""
-    global _llm
-    if _llm is None:
-        _llm = _init_nvidia_llm(max_tokens=2048)
-    return _llm
+def _resolve_api_key(role: str, cfg: dict) -> str | None:
+    direct = os.getenv(f"LLM_API_KEY_{role.upper()}")
+    if direct:
+        return direct
+    env_name = cfg.get("api_key_env", "NVIDIA_API_KEY")
+    return os.getenv(env_name) or os.getenv("NVIDIA_API_KEY")
+
+
+@lru_cache(maxsize=None)
+def get_llm(role: str = "qa"):
+    """Role-based LLM getter, backwards compatible with get_llm() calls."""
+    if role not in ROLE_CONFIG:
+        raise ValueError(f"Unknown LLM role {role!r}. Known roles: {list(ROLE_CONFIG)}")
+    cfg = ROLE_CONFIG[role]
+    api_key = _resolve_api_key(role, cfg)
+    if not api_key:
+        raise RuntimeError(
+            f"No API key available for role {role!r}. Set "
+            f"{cfg.get('api_key_env', 'NVIDIA_API_KEY')} or LLM_API_KEY_{role.upper()}."
+        )
+    return _init_nvidia_llm(
+        model=cfg["model"],
+        max_tokens=int(cfg["max_tokens"]),
+        temperature=float(cfg["temperature"]),
+        api_key=api_key,
+    )
 
 
 def get_agent_llm():
     """LLM tuned for agent tool-call iterations: lower max_tokens for speed."""
-    global _agent_llm
-    if _agent_llm is None:
-        _agent_llm = _init_nvidia_llm(max_tokens=768, temperature=0.05)
-    return _agent_llm
+    role = "qa"
+    cfg = ROLE_CONFIG[role]
+    api_key = _resolve_api_key(role, cfg)
+    if not api_key:
+        raise RuntimeError("No API key available for agent LLM (qa role).")
+    return _init_nvidia_llm(
+        model=cfg["model"],
+        max_tokens=768,
+        temperature=0.05,
+        api_key=api_key,
+    )
+
+
+@lru_cache(maxsize=1)
+def get_smalltalk_llm():
+    """LLM tuned for greetings / meta / general-knowledge replies.
+
+    Tight max_tokens so the model can't ramble — greetings should land in a
+    sentence or two, not a paragraph.
+    """
+    role = "qa"
+    cfg = ROLE_CONFIG[role]
+    api_key = _resolve_api_key(role, cfg)
+    if not api_key:
+        raise RuntimeError("No API key available for smalltalk LLM (qa role).")
+    return _init_nvidia_llm(
+        model=cfg["model"],
+        max_tokens=200,
+        temperature=0.4,
+        api_key=api_key,
+    )
 
 
 # ── Embedding adapter (singleton, matches ingestion model) ───────────────────

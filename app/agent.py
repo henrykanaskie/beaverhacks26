@@ -32,6 +32,7 @@ from llm import (
     get_agent_llm,
     get_embed_adapter,
     get_llm,
+    get_smalltalk_llm,
     iter_deltas,
     ndjson_event,
 )
@@ -46,7 +47,7 @@ _NUDGE_USE_TOOLS_MESSAGE = (
     "only cite paths and lines shown in <observation> blocks after tools run."
 )
 
-MAX_ITERATIONS = 8
+MAX_ITERATIONS = 5
 MAX_PARALLEL_TOOLS = 8
 OUTPUT_CAP_CHARS = 3000
 
@@ -544,6 +545,10 @@ Depth & evidence (critical):
   4. Only then write <answer> — it should describe the project's purpose, its core workflow, and how the pieces fit together, all grounded in code you actually read.
 - For narrow/specific questions: at least one tool observation containing the cited paths.
 - NEVER stop after reading only main.py / the entry point. That file is usually just boilerplate (imports, route registration, server startup). The real logic lives in the modules it imports.
+- For overview answers, structure your <answer> in this order:
+  1) Product purpose in plain language (what the repo is for, who uses it),
+  2) Core end-to-end workflow,
+  3) Key modules and responsibilities with citations.
 
 Tone when tools have run:
 - Write with grounded confidence from tool observations only. Avoid hedging for facts grounded in observations.
@@ -703,31 +708,62 @@ def _tool_label(name: str, args: dict[str, Any]) -> str:
     return f"Running {name}"
 
 
-_THINKING_PHRASES = [
-    "Analyzing the question…",
-    "Planning my approach…",
-    "Looking at the codebase…",
-    "Considering what to explore…",
-    "Figuring out where to look…",
-    "Examining the code…",
-    "Reviewing what I found…",
-    "Connecting the dots…",
-]
+def _summarize_trace(tool_trace: list[dict[str, Any]]) -> dict[str, Any]:
+    counts: dict[str, int] = {}
+    files_read: list[str] = []
+    last_search: str = ""
+    for step in tool_trace:
+        nm = step.get("name", "")
+        counts[nm] = counts.get(nm, 0) + 1
+        args = step.get("args") or {}
+        if nm == "read_file":
+            p = args.get("path")
+            if p and p not in files_read:
+                files_read.append(p)
+        elif nm in ("semantic_search", "grep"):
+            last_search = str(args.get("query") or args.get("pattern") or "")
+    return {
+        "counts": counts,
+        "files_read": files_read,
+        "last_search": last_search,
+        "total": len(tool_trace),
+    }
 
-_COMPOSING_PHRASES = [
-    "Putting it all together…",
-    "Writing up my findings…",
-    "Composing the answer…",
-    "Summarizing what I found…",
-]
+
+def _thinking_status(iteration: int, tool_trace: list[dict[str, Any]] | None = None) -> str:
+    """State-derived status reflecting what the agent has actually done so far."""
+    trace = tool_trace or []
+    if not trace:
+        return "Sizing up the question…" if iteration == 0 else "Picking where to look first…"
+
+    s = _summarize_trace(trace)
+    counts = s["counts"]
+    files = s["files_read"]
+    last_search = s["last_search"]
+
+    if counts.get("directory_tree") and not files:
+        return "Got the project layout — picking files to read next…"
+    if files:
+        if len(files) == 1:
+            return f"Read {files[0]} — tracing what it pulls in next…"
+        recent = files[-1]
+        return f"Read {len(files)} files (last: {recent}) — following the imports…"
+    if last_search:
+        snippet = last_search[:40] + ("…" if len(last_search) > 40 else "")
+        return f'Sifting through results for "{snippet}" — narrowing down…'
+    return f"Reviewed {s['total']} tool result{'s' if s['total'] != 1 else ''} — planning the next step…"
 
 
-def _thinking_status(iteration: int) -> str:
-    return _THINKING_PHRASES[iteration % len(_THINKING_PHRASES)]
-
-
-def _composing_status(iteration: int) -> str:
-    return _COMPOSING_PHRASES[iteration % len(_COMPOSING_PHRASES)]
+def _composing_status(iteration: int, tool_trace: list[dict[str, Any]] | None = None) -> str:
+    """State-derived composing status."""
+    trace = tool_trace or []
+    if not trace:
+        return "Writing up the answer…"
+    s = _summarize_trace(trace)
+    n_files = len(s["files_read"])
+    if n_files:
+        return f"Composing the answer from {n_files} file{'s' if n_files != 1 else ''} I read…"
+    return f"Composing the answer from {s['total']} observation{'s' if s['total'] != 1 else ''}…"
 
 
 # ---------------------------------------------------------------------------
@@ -821,7 +857,7 @@ def _yield_chunked(text: str, chunk_size: int = 12):
 def _stream_final_answer(messages, llm, tool_trace, repo_id: str):
     """Stream a final answer from the LLM, stripping XML tags in real-time."""
     prompt = _render_messages(messages)
-    yield ndjson_event({"type": "status", "text": _composing_status(0)})
+    yield ndjson_event({"type": "status", "text": _composing_status(0, tool_trace)})
 
     full_answer = ""
     try:
@@ -900,31 +936,59 @@ _OVERVIEW_HINT = (
 )
 
 
+def _build_rag_seed_observation(repo_id: str, question: str, k: int = 4) -> str:
+    """Inject small RAG-like context to guide initial tool exploration.
+
+    The seed is advisory context from semantic retrieval. The agent must still
+    run tools and verify details before finalizing its answer.
+    """
+    seed_query = question.strip() or "project purpose overview"
+    chunks = _retrieve_fast(seed_query, repo_id, k=max(1, int(k)))
+    if not chunks:
+        return ""
+    parts: list[str] = []
+    paths: list[str] = []
+    for c in chunks:
+        m = c.get("metadata") or {}
+        fp = m.get("file_path", "")
+        sl = int(m.get("start_line", 1) or 1)
+        txt = (c.get("text") or "").strip()
+        if not txt:
+            continue
+        if fp and fp not in paths:
+            paths.append(fp)
+        if len(txt) > 420:
+            txt = txt[:420] + "…"
+        parts.append(f"[{fp}:{sl}]\n{txt}")
+    if not parts:
+        return ""
+    path_suggestions = ""
+    if paths:
+        hints = ", ".join(paths[:4])
+        path_suggestions = (
+            f"\n\nSuggested next tool step: start with read_file on these likely relevant files: {hints}. "
+            "Then branch into imports/dependencies you discover."
+        )
+    return (
+        "RAG OVERVIEW SEED (initial high-level context from semantic retrieval):\n"
+        + "\n\n".join(parts)
+        + "\n\nUse this as orientation only; still run tools to verify and expand."
+        + path_suggestions
+    )
+
+
 def _is_direct_answer_ok(question: str, answer_text: str) -> bool:
     """Decide if the model's ungrounded answer should be accepted.
 
-    Returns True for small talk, meta questions, and general knowledge.
-    Returns False for anything that looks like a codebase question — the
-    model should use tools, not guess.
+    Strict: only obvious small talk and meta questions. Anything ambiguous
+    falls through to the full agent, whose system prompt already permits
+    direct general-knowledge answers when a question isn't about the repo.
     """
     q = question.strip()
-
     if _SMALLTALK_PATTERNS.match(q):
         return True
-
     if _META_PATTERNS.search(q):
         return True
-
-    # Very short questions with no code-related keywords are likely small talk
-    if len(q.split()) <= 3 and not re.search(r"(file|code|function|class|import|module|dir|folder|main|readme|config)", q, re.IGNORECASE):
-        return True
-
-    # If it's asking a general programming question (no "this", "the", "our" etc.)
-    general_markers = re.search(r"\b(what is a|explain|define|how does .* work in general|in python|in javascript|algorithm)\b", q, re.IGNORECASE)
-    codebase_markers = re.search(r"\b(this|the|our|here|codebase|repo|project|file|where|start|look|main\.py|readme)\b", q, re.IGNORECASE)
-    if general_markers and not codebase_markers:
-        return True
-
     return False
 
 
@@ -1025,11 +1089,14 @@ def _agent_loop(
 ):
     """Generator yielding NDJSON events as the agent explores and answers."""
 
-    # ── Fast path: small talk / meta / general knowledge ──────────────
-    # Skip the full tool prompt entirely — cuts latency ~3-5x.
+    # ── Fast path: small talk / meta. Skip the full tool prompt.
+    # Pure greetings get the constrained smalltalk LLM (short replies);
+    # meta questions ("who are you, what can you do") need more room, so
+    # they use the regular agent LLM.
     if _is_direct_answer_ok(question, ""):
         yield ndjson_event({"type": "status", "text": "Thinking…"})
-        agent_llm = get_agent_llm()
+        is_smalltalk = bool(_SMALLTALK_PATTERNS.match(question.strip()))
+        agent_llm = get_smalltalk_llm() if is_smalltalk else get_agent_llm()
         history_block = _format_agent_history(history)
         if history_block:
             user_content = f"{history_block}\n\nUser: {question}"
@@ -1074,6 +1141,18 @@ def _agent_loop(
     else:
         messages.append({"role": "user", "content": question + overview_suffix})
 
+    # Hybrid bootstrap: use lightweight RAG as an orientation layer for broad
+    # overview questions. Narrow questions skip the seed — the model's own
+    # tool calls are cheaper than paying for a redundant retrieval round.
+    if is_overview:
+        seed_obs = _build_rag_seed_observation(repo_id, question, k=6)
+        if seed_obs:
+            tail = (
+                "\n\nFor the final answer, lead with plain-language product purpose, "
+                "then explain the technical workflow and key modules."
+            )
+            messages.append({"role": "user", "content": seed_obs + tail})
+
     tool_trace: list[dict[str, Any]] = []
     nudge_count = 0
 
@@ -1083,11 +1162,11 @@ def _agent_loop(
     for iteration in range(MAX_ITERATIONS):
         prompt = _render_messages(messages)
 
-        yield ndjson_event({"type": "status", "text": _thinking_status(iteration)})
+        yield ndjson_event({"type": "status", "text": _thinking_status(iteration, tool_trace)})
 
-        # First iteration uses the full LLM (direct answers need room).
-        # Subsequent tool-call iterations use the fast LLM.
-        llm = answer_llm if iteration == 0 else agent_llm
+        # Use the fast LLM for tool-call iterations; only the final answer
+        # streaming path uses answer_llm.
+        llm = agent_llm
 
         try:
             response_text, _ = _stream_llm_text(llm, prompt)
@@ -1162,7 +1241,7 @@ def _agent_loop(
                 continue
 
             read_files = {t["args"].get("path") for t in tool_trace if t["name"] == "read_file" and t["args"].get("path")}
-            too_shallow = is_overview and len(read_files) < 4 and iteration < MAX_ITERATIONS - 2
+            too_shallow = is_overview and len(read_files) < 2 and iteration < MAX_ITERATIONS - 2
 
             if too_shallow:
                 log.info("[shallow] overview question but only read %d files (%s), pushing for more", len(read_files), read_files)
@@ -1224,7 +1303,7 @@ def _agent_loop(
             continue
 
         # Tools were used but model forgot tags — fall through to streaming answer
-        yield ndjson_event({"type": "status", "text": _composing_status(iteration)})
+        yield ndjson_event({"type": "status", "text": _composing_status(iteration, tool_trace)})
         messages.append({"role": "assistant", "content": response_text})
         messages.append({"role": "user", "content": "Now write your final <answer> citing what you found."})
         break
