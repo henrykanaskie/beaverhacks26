@@ -32,6 +32,7 @@ from query import router as query_router
 from trace import router as trace_router
 from system import router as system_router
 from projects import router as projects_router
+from agent import router as agent_router
 # from speech import router as speech_router
 app.include_router(ingest_router)
 app.include_router(files_router)
@@ -39,6 +40,7 @@ app.include_router(query_router)
 app.include_router(trace_router)
 app.include_router(system_router)
 app.include_router(projects_router)
+app.include_router(agent_router)
 # app.include_router(speech_router)
 
 app.mount(

@@ -29,18 +29,12 @@ def list_files(repo_id: str):
         return {"repo_id": repo_id, "files": json.load(f)}
 
 
-@router.get("/file/{repo_id}")
-def get_file_content(repo_id: str, path: str):
+def reconstruct_file(repo_id: str, path: str) -> dict | None:
     """Reconstruct file content from sorted Chroma chunks.
 
-    `path` is a query parameter, e.g. /file/{repo_id}?path=auth/login.py
+    Returns {file_path, language, content, line_count} or None if not found.
     """
-    if not collection_exists(repo_id):
-        raise HTTPException(status_code=404, detail="Repo not indexed")
-
     collection = get_or_create_collection(repo_id)
-
-    # collection.get(where=...) does not require an embedding, unlike .query
     results = collection.get(
         where={"file_path": path},
         limit=10000,
@@ -48,12 +42,9 @@ def get_file_content(repo_id: str, path: str):
     )
     docs = results.get("documents") or []
     metas = results.get("metadatas") or []
-
     if not docs:
-        raise HTTPException(status_code=404, detail="File not found")
+        return None
 
-    # Chunks overlap (chunk_lines_overlap=5), so naive concat duplicates lines.
-    # Stitch by line number using each chunk's start_line metadata.
     lines_by_num: dict[int, str] = {}
     for doc, meta in zip(docs, metas):
         start = int(meta.get("start_line", 1))
@@ -63,7 +54,26 @@ def get_file_content(repo_id: str, path: str):
 
     content = "\n".join(lines_by_num[n] for n in sorted(lines_by_num))
     language = metas[0].get("language", "unknown") if metas else "unknown"
-    return {"file_path": path, "language": language, "content": content}
+    return {
+        "file_path": path,
+        "language": language,
+        "content": content,
+        "line_count": len(lines_by_num),
+    }
+
+
+@router.get("/file/{repo_id}")
+def get_file_content(repo_id: str, path: str):
+    """Reconstruct file content from sorted Chroma chunks.
+
+    `path` is a query parameter, e.g. /file/{repo_id}?path=auth/login.py
+    """
+    if not collection_exists(repo_id):
+        raise HTTPException(status_code=404, detail="Repo not indexed")
+    result = reconstruct_file(repo_id, path)
+    if result is None:
+        raise HTTPException(status_code=404, detail="File not found")
+    return {"file_path": result["file_path"], "language": result["language"], "content": result["content"]}
 
 
 _EXT_TO_LANGUAGE = {
@@ -80,27 +90,11 @@ def _count_folders(node: dict) -> int:
     return 1 + sum(_count_folders(c) for c in node.get("children", []))
 
 
-@router.get("/architecture/{repo_id}")
-def get_architecture(repo_id: str):
-    """
-    Return the physical folder/file tree of the repo.
-    Edges represent containment: a folder contains files and subfolders.
-    Built from the flat file list saved at ingestion time — no AST parsing.
-    """
-    if not collection_exists(repo_id):
-        raise HTTPException(status_code=404, detail="Repo not indexed")
-
-    files_path = f"deps/{repo_id}_files.json"
-    if not os.path.exists(files_path):
-        raise HTTPException(status_code=404, detail="File list not found — re-index the repo")
-
-    with open(files_path, "r", encoding="utf-8") as f:
-        all_files = json.load(f)
-
+def build_file_tree(all_files: list[str]) -> dict:
+    """Build a nested folder/file tree dict from a flat file list."""
     root = {"id": "/", "name": "/", "type": "folder", "children": []}
 
     def get_or_create_folder(start: dict, folder_path: str) -> dict:
-        """Walk down the tree, creating folder nodes as needed. Returns the target folder node."""
         parts = folder_path.split("/")
         current = start
         accumulated = ""
@@ -139,9 +133,30 @@ def get_architecture(repo_id: str):
             sort_children(child)
 
     sort_children(root)
+    return root
+
+
+@router.get("/architecture/{repo_id}")
+def get_architecture(repo_id: str):
+    """
+    Return the physical folder/file tree of the repo.
+    Edges represent containment: a folder contains files and subfolders.
+    Built from the flat file list saved at ingestion time — no AST parsing.
+    """
+    if not collection_exists(repo_id):
+        raise HTTPException(status_code=404, detail="Repo not indexed")
+
+    files_path = f"deps/{repo_id}_files.json"
+    if not os.path.exists(files_path):
+        raise HTTPException(status_code=404, detail="File list not found — re-index the repo")
+
+    with open(files_path, "r", encoding="utf-8") as f:
+        all_files = json.load(f)
+
+    root = build_file_tree(all_files)
 
     total_files = len(all_files)
-    total_folders = _count_folders(root) - 1  # exclude the root itself
+    total_folders = _count_folders(root) - 1
 
     return {
         "repo_id": repo_id,

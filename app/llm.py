@@ -1,115 +1,157 @@
-"""Centralized NVIDIA LLM client selection by role.
-
-Callers request an LLM by role (e.g. "qa", "system_diagram", "narrative"),
-not by raw parameters. This keeps route handlers readable and lets us retune
-models/tokens/temps in one place — ROLE_CONFIG — or override any field per
-role via environment variables.
-
-API key sourcing
-    Each role specifies an `api_key_env` — the NAME of the env var to read
-    the key from (default: "NVIDIA_API_KEY"). To use a different API key for
-    a role, either:
-      - edit ROLE_CONFIG[role]["api_key_env"] to point at a different env var,
-        e.g. "NANO_API_KEY", and define that var in your .env, OR
-      - set the direct per-role override LLM_API_KEY_<ROLE>=nvapi-...
-
-Environment override pattern (optional): LLM_<FIELD>_<ROLE>, upper-cased.
-Examples:
-    LLM_MODEL_NARRATIVE=nvidia/llama-3.1-nemotron-70b-instruct
-    LLM_MAX_TOKENS_QA=8192
-    LLM_TEMPERATURE_SYSTEM_DIAGRAM=0.0
-    LLM_API_KEY_NARRATIVE=nvapi-xxxxx
-"""
+"""Shared LLM factories, models, and helpers used by both /query and /agent."""
 from __future__ import annotations
 
+import json
 import os
-from functools import lru_cache
-from typing import Literal
 
 from llama_index.llms.nvidia import NVIDIA
+from pydantic import BaseModel
 
-Role = Literal["qa", "system_diagram", "narrative", "zoom"]
+MODEL = "nvidia/llama-3.3-nemotron-super-49b-v1.5"
 
+# ── Pydantic models shared across endpoints ──────────────────────────────────
 
-# Single source of truth. Adding a role means appending here; call sites stay stable.
-#
-# Model choice rationale:
-#   - "qa" keeps the Nemotron-Super reasoning model — good for free-form code Q&A.
-#   - "system_diagram" and "narrative" produce structured JSON; mistral-nemotron
-#     is fine-tuned for agentic workflows and function calling, so it emits valid
-#     JSON reliably and avoids the silent thinking pass that caused APITimeouts
-#     on the reasoning model.
-ROLE_CONFIG: dict[str, dict] = {
-    "qa": {
-        "model": "nvidia/llama-3.3-nemotron-super-49b-v1.5",
-        "temperature": 0.1,
-        "max_tokens": 4096,
-        "timeout": 300.0,
-        "api_key_env": "NVIDIA_API_KEY",
-    },
-    "system_diagram": {
-        "model": "mistralai/mistral-nemotron",
-        "temperature": 0.1,
-        "max_tokens": 2048,
-        "timeout": 300.0,
-        "api_key_env": "NANO_API_KEY",
-    },
-    "narrative": {
-        "model": "mistralai/mistral-nemotron",
-        "temperature": 0.2,
-        "max_tokens": 4096,
-        "timeout": 300.0,
-        "api_key_env": "NANO_API_KEY",
-    },
-    # Per-component deep-dive for the narrative "zoom in" feature. Smaller output
-    # than narrative because it describes a single component, not a full flow.
-    "zoom": {
-        "model": "mistralai/mistral-nemotron",
-        "temperature": 0.1,
-        "max_tokens": 1536,
-        "timeout": 300.0,
-        "api_key_env": "NANO_API_KEY",
-    },
-}
+class Turn(BaseModel):
+    role: str
+    content: str
 
 
-def _override(role: str, field: str, default):
-    """Return env override if set, else the default from ROLE_CONFIG."""
-    env_key = f"LLM_{field.upper()}_{role.upper()}"
-    return os.getenv(env_key, default)
+# ── LLM singletons ──────────────────────────────────────────────────────────
+
+_llm = None
+_agent_llm = None
 
 
-def _resolve_api_key(role: str, cfg: dict) -> str | None:
-    """Resolve the API key for a role.
-
-    Precedence:
-      1. Direct per-role env override:  LLM_API_KEY_<ROLE>
-      2. ROLE_CONFIG api_key_env        (reads that env var, e.g. NANO_API_KEY)
-      3. NVIDIA_API_KEY                 (global fallback)
-    """
-    direct = os.getenv(f"LLM_API_KEY_{role.upper()}")
-    if direct:
-        return direct
-    env_name = cfg.get("api_key_env", "NVIDIA_API_KEY")
-    return os.getenv(env_name) or os.getenv("NVIDIA_API_KEY")
-
-
-@lru_cache(maxsize=None)
-def get_llm(role: Role = "qa") -> NVIDIA:
-    """Return the NVIDIA LLM configured for the given role (cached singleton per role)."""
-    if role not in ROLE_CONFIG:
-        raise ValueError(f"Unknown LLM role {role!r}. Known roles: {list(ROLE_CONFIG)}")
-    cfg = ROLE_CONFIG[role]
-    api_key = _resolve_api_key(role, cfg)
-    if not api_key:
-        raise RuntimeError(
-            f"No API key available for role {role!r}. Set "
-            f"{cfg.get('api_key_env', 'NVIDIA_API_KEY')} or LLM_API_KEY_{role.upper()} in .env"
-        )
-    return NVIDIA(
-        model=_override(role, "model", cfg["model"]),
-        api_key=api_key,
-        temperature=float(_override(role, "temperature", cfg["temperature"])),
-        max_tokens=int(_override(role, "max_tokens", cfg["max_tokens"])),
-        timeout=float(_override(role, "timeout", cfg.get("timeout", 60.0))),
+def _init_nvidia_llm(max_tokens: int, temperature: float = 0.1):
+    llm = NVIDIA(
+        model=MODEL,
+        api_key=os.getenv("NVIDIA_API_KEY"),
+        temperature=temperature,
+        max_tokens=max_tokens,
     )
+    if llm.is_chat_model is None:
+        llm.is_chat_model = True
+    if llm.is_function_calling_model is None:
+        llm.is_function_calling_model = False
+    return llm
+
+
+def get_llm():
+    """Full LLM for generating final answers (higher max_tokens)."""
+    global _llm
+    if _llm is None:
+        _llm = _init_nvidia_llm(max_tokens=2048)
+    return _llm
+
+
+def get_agent_llm():
+    """LLM tuned for agent tool-call iterations: lower max_tokens for speed."""
+    global _agent_llm
+    if _agent_llm is None:
+        _agent_llm = _init_nvidia_llm(max_tokens=768, temperature=0.05)
+    return _agent_llm
+
+
+# ── Embedding adapter (singleton, matches ingestion model) ───────────────────
+
+_embed_adapter = None
+_embed_provider = None
+
+
+def get_embed_adapter():
+    """Return a singleton embedding adapter matching the ingestion model.
+
+    Tries CodeT5+ first, falls back to all-MiniLM-L6-v2 — same order as
+    ingest.py so query-time embeddings stay aligned with stored vectors.
+    """
+    global _embed_adapter, _embed_provider
+    if _embed_adapter is not None:
+        return _embed_adapter, _embed_provider
+
+    try:
+        import torch
+        from transformers import AutoModel, AutoTokenizer
+
+        tokenizer = AutoTokenizer.from_pretrained(
+            "Salesforce/codet5p-110m-embedding", trust_remote_code=True
+        )
+        model = AutoModel.from_pretrained(
+            "Salesforce/codet5p-110m-embedding", trust_remote_code=True
+        )
+        model.eval()
+
+        class _CodeT5Adapter:
+            def embed(self, text: str) -> list[float]:
+                inputs = tokenizer(
+                    [text],
+                    padding=True,
+                    truncation=True,
+                    max_length=512,
+                    return_tensors="pt",
+                )
+                with torch.no_grad():
+                    outputs = model(**inputs)
+                return outputs[0].tolist()
+
+        print("Query embed: using Salesforce/codet5p-110m-embedding")
+        _embed_adapter = _CodeT5Adapter()
+        _embed_provider = "codet5p"
+        return _embed_adapter, _embed_provider
+    except Exception as e:
+        print(
+            f"Warning: CodeT5+ failed to load for queries ({e!r}); "
+            "falling back to all-MiniLM-L6-v2"
+        )
+
+    from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
+
+    st_fn = SentenceTransformerEmbeddingFunction(model_name="all-MiniLM-L6-v2")
+
+    class _FallbackAdapter:
+        def embed(self, text: str) -> list[float]:
+            return st_fn([text])[0]
+
+    print("Query embed: using fallback all-MiniLM-L6-v2")
+    _embed_adapter = _FallbackAdapter()
+    _embed_provider = "local"
+    return _embed_adapter, _embed_provider
+
+
+# ── Small helpers ────────────────────────────────────────────────────────────
+
+def extract_citations(answer: str, chunks: list[dict] | None = None) -> list[dict]:
+    """Extract [file_path:line] citations the model actually wrote."""
+    import re as _re
+
+    pattern = r'\[([^\]]+):(\d+)\]'
+    found = _re.findall(pattern, answer)
+    citations = []
+    seen: set[tuple[str, str]] = set()
+    for file_path, line_str in found:
+        key = (file_path, line_str)
+        if key not in seen:
+            seen.add(key)
+            citations.append({"file_path": file_path, "start_line": int(line_str)})
+    return citations
+
+
+def ndjson_event(obj: dict) -> str:
+    """One NDJSON line."""
+    return json.dumps(obj) + "\n"
+
+
+def iter_deltas(stream):
+    """Yield string deltas from a llama_index streaming response.
+
+    Some wrappers expose ``.delta`` per chunk; others only ``.text``
+    (cumulative). Handle both.
+    """
+    last = ""
+    for chunk in stream:
+        delta = getattr(chunk, "delta", None)
+        if delta is None:
+            text = getattr(chunk, "text", "") or ""
+            delta = text[len(last):]
+            last = text
+        if delta:
+            yield delta

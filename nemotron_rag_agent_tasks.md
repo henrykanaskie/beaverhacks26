@@ -14,7 +14,7 @@ indexes the code, and lets users interact via four features:
 
 1. **Chat + RAG** — natural language Q&A, scoped to selected files, with cited answers
 2. **Trace** — given a file, highlights every file that imports or references it
-3. **Podcast** — full speech-to-speech conversation powered by Nemotron VoiceChat
+3. **Live Conversation** — voice-driven multi-turn Q&A with the codebase. Browser mic → STT (NVIDIA hosted ASR preferred, local Whisper fallback) → Chat+RAG pipeline → Kokoro TTS → browser audio. No Early Access required; the same `NVIDIA_API_KEY` already used for Nemotron unlocks the hosted STT path on the free tier.
 4. **Architecture diagram** — interactive collapsible tree showing the physical folder and file structure of the repo; folder nodes expand and collapse, file nodes open the code viewer
 
 ## Tech stack (complete, no omissions)
@@ -29,7 +29,8 @@ indexes the code, and lets users interact via four features:
 | Vector store         | Chroma DB                                                             |
 | Reranker             | cross-encoder/ms-marco-MiniLM-L-6-v2 via SentenceTransformers (local) |
 | LLM (text)           | nvidia/llama-3.1-nemotron-70b-instruct via NVIDIA API Catalog         |
-| LLM (voice)          | nvidia/nemotron-voicechat via NVIDIA API Catalog (Early Access)       |
+| Speech-to-text       | NVIDIA hosted ASR (Parakeet/Canary via NVIDIA API Catalog, free tier with NVIDIA_API_KEY) — preferred; openai-whisper (whisper-large-v3-turbo, local CPU/GPU) — fallback |
+| Text-to-speech       | kokoro (82M params, Apache 2.0, local CPU)                            |
 | Dependency analysis  | tree-sitter AST import parsing                                        |
 | Architecture diagram | D3.js v7 collapsible tree layout (cdnjs.cloudflare.com only)          |
 | Frontend             | Plain HTML + JS + CSS — tailwind framework                            |
@@ -134,10 +135,23 @@ POST /trace
             404 { "detail": "File not found in dependency graph" }
 
 POST /speech
-  Request:  { "repo_id": "abc123", "audio_base64": "<base64 encoded audio>" }
-  Response: { "audio_base64": "...", "transcript": "...", "answer": "..." }
-            If VoiceChat unavailable, answer is text only — audio_base64 will be null
-  Errors:   404, 503
+  Request:  {
+    "repo_id": "abc123",
+    "audio_base64": "<base64 encoded webm/wav audio>",   # required — captured by browser MediaRecorder
+    "conversation_id": "uuid-or-null",                    # optional — null starts a new conversation
+    "scope": "auth/"                                      # optional — same semantics as POST /query
+  }
+  Response: {
+    "conversation_id": "uuid",
+    "transcript": "how does auth work?",      # Whisper transcription of input audio
+    "answer": "...",                          # Nemotron RAG answer (text)
+    "citations": [{ "file_path": "auth/login.py", "start_line": 42 }],
+    "audio_base64": "<base64 wav>",           # Kokoro TTS of the answer
+    "audio_mime": "audio/wav"
+  }
+  Errors:   404 { "detail": "Repo not indexed" }
+            400 { "detail": "Empty or unintelligible audio" }
+            503 { "detail": "STT/TTS model not loaded" }
 
 GET /architecture/{repo_id}
   Response: {
@@ -1322,181 +1336,336 @@ def trace_file(request: TraceRequest):
 
 ---
 
-## POD-01: Podcast feature — Web Speech API fallback (build first)
+## POD-01: Live Conversation — Whisper STT + RAG + Kokoro TTS chain
 
-**Epic**: Podcast
-**Depends on**: GEN-01
+**Epic**: Live Conversation
+**Depends on**: GEN-01, QRY-01
 **Blocks**: POD-02, FE-06
 
-**Objective**: Implement the podcast backend endpoint using a text-based fallback path. The frontend sends transcribed text (from Web Speech API), the backend runs the standard Chat+RAG pipeline, and returns the answer as text for the frontend to speak via Web Speech API `SpeechSynthesis`.
+**Objective**: Implement `POST /speech` as the full single-turn voice chain. The browser sends recorded audio (base64-encoded webm or wav from MediaRecorder). The backend transcribes the audio (preferring **NVIDIA's hosted ASR** on the free tier — same `NVIDIA_API_KEY` already in use for Nemotron — and falling back to local Whisper if the hosted call fails or no key is set), runs the standard Chat+RAG pipeline on the transcript, synthesizes the answer to speech locally with Kokoro, and returns the audio plus the transcript, answer, and citations. No Early Access required.
 
 **System context**:
 
-- This is the fallback path — build it first and always keep it working
-- VoiceChat (POD-02) is Early Access and may not be available — this fallback must always work
-- The frontend will handle STT and TTS using the browser's Web Speech API:
-  - STT: `window.SpeechRecognition` (captures speech → text)
-  - TTS: `window.speechSynthesis.speak(new SpeechSynthesisUtterance(text))`
-- The backend for the fallback only needs to accept text and return text — no audio processing
+- STT (preferred): NVIDIA hosted ASR via the NVIDIA API Catalog — free tier, no Early Access. Default model: `nvidia/parakeet-tdt-0.6b-v2` (fast, top-tier English WER). Alternative: `nvidia/canary-1b-flash` for higher multilingual accuracy. Both are reachable from `https://integrate.api.nvidia.com/v1/audio/transcriptions` (OpenAI-compatible). Pick the model name via env var `NVIDIA_STT_MODEL`, defaulting to `nvidia/parakeet-tdt-0.6b-v2`.
+- STT (fallback): `openai-whisper` (`whisper-large-v3-turbo`). MIT licensed, runs on CPU, faster on GPU. Used only when the hosted STT call fails (network error, 5xx, missing key, or rate-limit). Loaded lazily on first failure so a healthy hosted path never pays the Whisper cold-load cost.
+- TTS: `kokoro` (82M params, Apache 2.0). Built on StyleTTS2, no encoder/diffusion — fast on CPU, low latency, suitable for hackathon demos.
+- Kokoro loads **once at app startup**. Whisper is loaded **lazily** on first fallback (do not preload it — many runs will never hit the fallback and we don't want to pay ~5–15s of cold-load for nothing).
+- Expected per-turn end-to-end latency: **1–3 seconds** when the hosted STT path is healthy; **3–5 seconds** on the local Whisper fallback.
+- Audio in: webm/opus (browser MediaRecorder default) or wav. The hosted endpoint accepts the multipart audio file directly. The Whisper fallback uses ffmpeg (`openai-whisper` invokes it internally) — `ffmpeg` must be installed on the host (document in README).
+- Audio out: wav at 24kHz mono (Kokoro's native output). Base64-encode for JSON transport.
+- The Chat+RAG pipeline is **unchanged** — call `query_repo` exactly as the text `/query` endpoint does. Do not duplicate retrieval logic. This guarantees voice answers match text answers byte-for-byte.
+- Verify the exact request schema for the hosted ASR endpoint at <https://build.nvidia.com/nvidia/parakeet-tdt-0_6b-v2> (and the Canary equivalent) when wiring this up — NVIDIA has rotated the schema in the past, and the snippet below is the current OpenAI-compatible shape but should be cross-checked against the live "View code" sample on that page.
+
+**Environment variables to add** to `.env`:
+
+```
+NVIDIA_STT_MODEL=nvidia/parakeet-tdt-0.6b-v2   # or nvidia/canary-1b-flash for higher multilingual accuracy
+NVIDIA_STT_URL=https://integrate.api.nvidia.com/v1/audio/transcriptions
+```
+
+**Dependencies to add** to `requirements.txt`:
+
+```
+httpx>=0.27           # already in the project — verify before adding
+openai-whisper>=20240930
+kokoro>=0.7.0
+soundfile>=0.12.1
+numpy>=1.26
+```
+
+System dependency (document in README, do not install in code): `ffmpeg` — needed only on the Whisper fallback path, but always install it because users may go offline.
 
 **Implementation**:
+
+Create `/app/speech_models.py` — Kokoro is preloaded; Whisper is loaded lazily on first fallback so a healthy hosted-STT path never pays the cold-load cost:
+
+```python
+import functools
+from kokoro import KPipeline
+
+@functools.lru_cache(maxsize=1)
+def get_whisper():
+    # Lazily imported and loaded — only constructed if the hosted STT call fails.
+    import whisper
+    return whisper.load_model("large-v3-turbo")
+
+@functools.lru_cache(maxsize=1)
+def get_kokoro():
+    # American English voices; lang_code="a" = American English.
+    return KPipeline(lang_code="a")
+```
 
 Create `/app/speech.py`:
 
 ```python
+import base64
+import io
+import logging
 import os
+import tempfile
+from uuid import uuid4
+
+import httpx
+import numpy as np
+import soundfile as sf
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+
 from db import collection_exists
+from speech_models import get_whisper, get_kokoro
 
 router = APIRouter()
+log = logging.getLogger(__name__)
+
+KOKORO_VOICE = "af_heart"
+KOKORO_SAMPLE_RATE = 24000
+
+NVIDIA_STT_URL = os.getenv("NVIDIA_STT_URL", "https://integrate.api.nvidia.com/v1/audio/transcriptions")
+NVIDIA_STT_MODEL = os.getenv("NVIDIA_STT_MODEL", "nvidia/parakeet-tdt-0.6b-v2")
+NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY")
 
 class SpeechRequest(BaseModel):
     repo_id: str
-    transcript: str          # Text from STT (sent by browser)
-    audio_base64: str | None = None   # Reserved for VoiceChat path (POD-02)
+    audio_base64: str
+    conversation_id: str | None = None
+    scope: str | None = None
+
+async def _stt_via_nvidia(audio_bytes: bytes) -> str | None:
+    """Try NVIDIA hosted ASR first. Return transcript on success, None on failure (caller falls back to Whisper)."""
+    if not NVIDIA_API_KEY:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            response = await client.post(
+                NVIDIA_STT_URL,
+                headers={"Authorization": f"Bearer {NVIDIA_API_KEY}"},
+                files={"file": ("audio.webm", audio_bytes, "audio/webm")},
+                data={"model": NVIDIA_STT_MODEL, "response_format": "json"},
+            )
+        if response.status_code != 200:
+            log.warning("NVIDIA STT non-200 (%s): %s", response.status_code, response.text[:200])
+            return None
+        data = response.json()
+        # OpenAI-compatible audio/transcriptions returns { "text": "..." }.
+        return (data.get("text") or "").strip() or None
+    except Exception as e:
+        log.warning("NVIDIA STT failed: %s — falling back to local Whisper", e)
+        return None
+
+def _stt_via_whisper(audio_bytes: bytes) -> str:
+    """Local Whisper fallback. Synchronous CPU work — caller should run in a thread if blocking is a concern."""
+    with tempfile.NamedTemporaryFile(suffix=".webm", delete=True) as tmp:
+        tmp.write(audio_bytes)
+        tmp.flush()
+        result = get_whisper().transcribe(tmp.name, fp16=False)
+    return (result.get("text") or "").strip()
 
 @router.post("/speech")
 async def speech_query(request: SpeechRequest):
     if not collection_exists(request.repo_id):
         raise HTTPException(status_code=404, detail="Repo not indexed")
 
-    # Fallback path: treat transcript as a text query through the standard pipeline
-    # Import the query logic directly rather than making an internal HTTP call
+    try:
+        audio_bytes = base64.b64decode(request.audio_base64)
+    except Exception:
+        raise HTTPException(status_code=400, detail="audio_base64 is not valid base64")
+
+    # 1. STT — NVIDIA hosted first, local Whisper as a safety net.
+    transcript = await _stt_via_nvidia(audio_bytes)
+    stt_source = "nvidia"
+    if not transcript:
+        try:
+            transcript = _stt_via_whisper(audio_bytes)
+            stt_source = "whisper"
+        except Exception as e:
+            raise HTTPException(status_code=503, detail=f"STT failed: {e}")
+
+    if not transcript:
+        raise HTTPException(status_code=400, detail="Empty or unintelligible audio")
+    log.info("STT used %s — transcript len=%d", stt_source, len(transcript))
+
+    # 2. RAG — call the same pipeline the text /query endpoint uses.
     from query import QueryRequest, query_repo
-    query_request = QueryRequest(repo_id=request.repo_id, question=request.transcript)
+    query_request = QueryRequest(
+        repo_id=request.repo_id,
+        question=transcript,
+        scope=request.scope,
+    )
     result = await query_repo(query_request)
+    answer_text = result["answer"]
+
+    # 3. Kokoro TTS — concatenate streamed chunks into a single wav buffer.
+    try:
+        pipeline = get_kokoro()
+        audio_chunks = []
+        for _, _, audio in pipeline(answer_text, voice=KOKORO_VOICE):
+            audio_chunks.append(np.asarray(audio, dtype=np.float32))
+        if not audio_chunks:
+            raise RuntimeError("Kokoro produced no audio")
+        full_audio = np.concatenate(audio_chunks)
+        buf = io.BytesIO()
+        sf.write(buf, full_audio, KOKORO_SAMPLE_RATE, format="WAV")
+        audio_b64 = base64.b64encode(buf.getvalue()).decode()
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"TTS failed: {e}")
 
     return {
-        "transcript": request.transcript,
-        "answer": result["answer"],
+        "conversation_id": request.conversation_id or str(uuid4()),
+        "transcript": transcript,
+        "stt_source": stt_source,    # "nvidia" or "whisper" — useful for the demo and for debugging
+        "answer": answer_text,
         "citations": result["citations"],
-        "audio_base64": None   # Null for fallback — TTS handled in browser
+        "audio_base64": audio_b64,
+        "audio_mime": "audio/wav",
     }
+```
+
+Wire the router in `/app/main.py` and preload **only Kokoro** on startup. Whisper is intentionally not preloaded — it loads on first fallback only.
+
+```python
+from fastapi import FastAPI
+from speech import router as speech_router
+from speech_models import get_kokoro
+
+app = FastAPI()
+app.include_router(speech_router)
+
+@app.on_event("startup")
+async def _warm_speech_models():
+    get_kokoro()   # load once at startup — Whisper is lazy on first fallback
 ```
 
 **Acceptance criteria**:
 
-- `POST /speech { "repo_id": "...", "transcript": "how does auth work?" }` returns an answer
-- `audio_base64` in the response is `null` for the fallback path
-- The response contains the same `answer` and `citations` as `POST /query` would return
+- `POST /speech` with valid recorded audio returns `{ conversation_id, transcript, stt_source, answer, citations, audio_base64, audio_mime }`, all populated.
+- When `NVIDIA_API_KEY` is set and the hosted endpoint is reachable, `stt_source == "nvidia"`. Verifiable via response field and via server logs (`STT used nvidia`).
+- When the hosted STT is mocked to return non-200 or to raise, the endpoint still succeeds with `stt_source == "whisper"`.
+- When `NVIDIA_API_KEY` is unset, the hosted call is skipped entirely (no wasted RTT) and `stt_source == "whisper"`.
+- `transcript` is non-empty and roughly matches what was spoken; `answer` and `citations` match what `POST /query` returns for the same `transcript`/`scope`; `audio_base64` decodes to a valid wav.
+- App startup logs show Kokoro loaded once. Whisper does **not** load at startup. Whisper loads lazily on the first fallback request and is cached thereafter.
+- Unknown `repo_id` → 404. Empty/silent audio → 400. Both STT paths failing → 503 with descriptive message.
+- Hosted STT path latency target: under ~3 seconds end-to-end for a one-sentence answer. Whisper-fallback path: under ~5 seconds.
 
 **Do not**:
 
-- Do not process audio on the server in this task — that is POD-02
-- Do not call any external TTS API in this task — TTS is the browser's responsibility in the fallback
+- Do not preload Whisper at startup. The lazy-load pattern is intentional — many runs will never hit the fallback.
+- Do not let a hosted STT failure propagate as a 5xx. Catch broadly inside `_stt_via_nvidia`, log, return `None`, and fall back. The user should never see "NVIDIA error" — only a clean answer or a final 503 if **both** paths fail.
+- Do not reload models per request — `functools.lru_cache` on the loaders is the singleton mechanism.
+- Do not bypass the existing RAG pipeline — always go through `query_repo` so voice and text answers stay consistent.
+- Do not call any non-NVIDIA hosted STT (no OpenAI Whisper API, no Deepgram, no AssemblyAI). Hosted STT must be NVIDIA's free tier; offline STT must be local `openai-whisper`.
+- Do not return `audio_base64: null` from the success path — audio is mandatory for this endpoint. If TTS fails, return 503.
 
 ---
 
-## POD-02: Podcast feature — Nemotron VoiceChat integration
+## POD-02: Live Conversation — multi-turn history and conversation context
 
-**Epic**: Podcast
+**Epic**: Live Conversation
 **Depends on**: POD-01
 **Blocks**: FE-06
 
-**⚠ EARLY ACCESS REQUIRED**: This task can only be implemented after Early Access to Nemotron 3 VoiceChat is granted at `developer.nvidia.com/nemotron-voicechat-early-access`. Do not block other tasks on this — POD-01 fallback must work independently.
-
-**Objective**: Extend the `POST /speech` endpoint to detect if audio is provided, retrieve RAG context from Chroma, inject context as a system prompt, call the VoiceChat API with the audio, and return the audio response.
+**Objective**: Make `POST /speech` support live, multi-turn conversation. The same `conversation_id` carries history across turns so the user can ask follow-ups like "what about the JWT side?" after a question about auth, and the model receives the running dialog as context. Each turn still goes through Whisper → RAG → Kokoro; this task only adds the conversation memory layer.
 
 **System context**:
 
-- VoiceChat model: `nvidia/nemotron-voicechat` via NVIDIA API Catalog
-- VoiceChat is full-duplex — it handles ASR, LLM reasoning, and TTS in one call
-- RAG context is injected via system prompt (text) alongside the audio input
-- The system prompt should be brief — VoiceChat has a smaller effective context window than Nemotron 70B — use top-3 chunks maximum, not top-5
-- Audio format expected: webm or wav (browser MediaRecorder default is webm)
-- Response: audio stream (base64 encode it for JSON transport)
+- Conversation state lives in-process in a simple dict, keyed by `conversation_id`. No DB row, no persistence across server restarts — that is overkill for a hackathon and would require migrations.
+- Each turn appends `(user_transcript, assistant_answer)` to the history. The history is summarized into the question sent to RAG so retrieval stays scoped to the latest user intent while the LLM still sees prior context.
+- Cap history at the last **6 turns** (3 user + 3 assistant) to keep the prompt small and per-turn latency predictable. Older turns drop off FIFO.
+- Concurrent requests on the same `conversation_id` are not expected (a user only speaks one turn at a time). No locking needed.
+- A new `conversation_id` is generated on the server **only if the client sends `null`**. Once issued, the client must echo the same id on every follow-up turn.
 
 **Implementation**:
 
-Update the `speech_query` function in `/app/speech.py`:
+Add to `/app/speech.py`:
 
 ```python
-import base64
-import httpx
+from collections import deque
+from threading import Lock
 
-async def _call_voicechat(audio_bytes: bytes, system_prompt: str) -> bytes:
-    """Call the NVIDIA VoiceChat API. Returns audio bytes of the response."""
-    # Note: Exact API schema TBD — check https://build.nvidia.com/nvidia/nemotron-voicechat
-    # for the current endpoint spec when Early Access is granted.
-    # This is a placeholder implementation — update once API docs are available.
-    api_key = os.getenv("NVIDIA_API_KEY")
-    async with httpx.AsyncClient(timeout=30) as client:
-        response = await client.post(
-            "https://integrate.api.nvidia.com/v1/audio/speech-to-speech",
-            headers={"Authorization": f"Bearer {api_key}"},
-            content=audio_bytes,
-            params={"system_prompt": system_prompt, "model": "nvidia/nemotron-voicechat"}
+# In-memory conversation history. Keyed by conversation_id.
+# Each entry is a deque of {"role": "user"|"assistant", "text": str}, max 6 entries.
+_HISTORY: dict[str, deque] = {}
+_HISTORY_LOCK = Lock()
+_MAX_TURNS = 6  # 3 user + 3 assistant
+
+def _get_history(cid: str) -> deque:
+    with _HISTORY_LOCK:
+        if cid not in _HISTORY:
+            _HISTORY[cid] = deque(maxlen=_MAX_TURNS)
+        return _HISTORY[cid]
+
+def _format_history(history: deque) -> str:
+    if not history:
+        return ""
+    lines = []
+    for turn in history:
+        prefix = "User" if turn["role"] == "user" else "Assistant"
+        lines.append(f"{prefix}: {turn['text']}")
+    return "\n".join(lines)
+```
+
+Modify the `speech_query` body from POD-01 so the question sent to RAG carries the prior dialog:
+
+```python
+    # --- after Whisper STT, before RAG ---
+    conversation_id = request.conversation_id or str(uuid4())
+    history = _get_history(conversation_id)
+
+    # Compose the question with prior dialog so follow-ups resolve correctly.
+    history_text = _format_history(history)
+    if history_text:
+        composed_question = (
+            f"Conversation so far:\n{history_text}\n\n"
+            f"User's latest question: {transcript}"
         )
-        response.raise_for_status()
-        return response.content
+    else:
+        composed_question = transcript
 
-@router.post("/speech")
-async def speech_query(request: SpeechRequest):
-    if not collection_exists(request.repo_id):
-        raise HTTPException(status_code=404, detail="Repo not indexed")
-
-    # If audio is provided, use VoiceChat path
-    if request.audio_base64:
-        audio_bytes = base64.b64decode(request.audio_base64)
-
-        # Get RAG context — use top-3 chunks for VoiceChat (smaller context window)
-        from query import QueryRequest, query_repo, _embed_query, _reranker, build_prompt
-
-        # We need the transcript to retrieve relevant context
-        # If transcript not provided, VoiceChat must transcribe first — two-step approach
-        if request.transcript:
-            query_embedding = _embed_query(request.transcript)
-            from db import get_or_create_collection
-            collection = get_or_create_collection(request.repo_id)
-            results = collection.query(query_embeddings=[query_embedding], n_results=10)
-            docs = results["documents"][0]
-            metas = results["metadatas"][0]
-            pairs = [(request.transcript, doc) for doc in docs]
-            scores = _reranker.predict(pairs)
-            ranked = sorted(zip(scores, docs, metas), reverse=True)[:3]
-            context_block = "\n\n".join(
-                f"[{m['file_path']}:{m['start_line']}]\n{doc}"
-                for _, doc, m in ranked
-            )
-            system_prompt = f"You are a code assistant. Use this context:\n{context_block}"
-        else:
-            system_prompt = "You are a code assistant."
-
-        try:
-            audio_response = await _call_voicechat(audio_bytes, system_prompt)
-            return {
-                "transcript": request.transcript,
-                "answer": None,
-                "citations": [],
-                "audio_base64": base64.b64encode(audio_response).decode()
-            }
-        except Exception as e:
-            # Fall through to text fallback if VoiceChat fails
-            print(f"VoiceChat failed, falling back to text: {e}")
-
-    # Fallback text path
-    from query import QueryRequest, query_repo
-    query_request = QueryRequest(repo_id=request.repo_id, question=request.transcript or "")
+    # --- RAG call uses composed_question instead of transcript ---
+    query_request = QueryRequest(
+        repo_id=request.repo_id,
+        question=composed_question,
+        scope=request.scope,
+    )
     result = await query_repo(query_request)
+    answer_text = result["answer"]
+
+    # --- after TTS, before return ---
+    history.append({"role": "user", "text": transcript})
+    history.append({"role": "assistant", "text": answer_text})
+
     return {
-        "transcript": request.transcript,
-        "answer": result["answer"],
+        "conversation_id": conversation_id,
+        "transcript": transcript,
+        "answer": answer_text,
         "citations": result["citations"],
-        "audio_base64": None
+        "audio_base64": audio_b64,
+        "audio_mime": "audio/wav",
     }
+```
+
+Add a small management endpoint so the frontend can reset a conversation without restarting the server:
+
+```python
+@router.delete("/speech/conversation/{conversation_id}")
+async def reset_conversation(conversation_id: str):
+    with _HISTORY_LOCK:
+        _HISTORY.pop(conversation_id, None)
+    return {"conversation_id": conversation_id, "status": "cleared"}
 ```
 
 **Acceptance criteria**:
 
-- When `audio_base64` is null, the fallback text path is used — same behavior as POD-01
-- When `audio_base64` is provided and VoiceChat is available, `audio_base64` in the response is non-null
-- When VoiceChat call fails for any reason, endpoint falls back to text path gracefully — never 500
+- First turn with `conversation_id: null` returns a server-generated `conversation_id`. Subsequent turns echoing that id receive prior dialog as part of the LLM input (verifiable by asking a follow-up like "and the JWT path?" — answer references the prior topic).
+- After 4+ turns on the same conversation, only the last 6 entries are kept (`len(_HISTORY[cid]) <= 6`).
+- `DELETE /speech/conversation/{id}` removes the history; the next turn behaves as a fresh conversation.
+- An unknown `conversation_id` on a follow-up does not error — it is treated as a fresh conversation that simply has no prior history yet.
+- POD-01 acceptance criteria still hold (transcript, answer, citations, audio all populated).
 
 **Do not**:
 
-- Do not pass more than top-3 chunks to VoiceChat system prompt
-- Do not let VoiceChat failure propagate as an error — always fall back to text
+- Do not persist conversation history to disk or a database — in-memory only.
+- Do not unbounded-grow `_HISTORY`. The deque `maxlen` enforces this per-conversation; do not remove it.
+- Do not pass the entire raw history to the **retrieval** step (embedding) — only the latest user transcript drives retrieval. The history is for the LLM's reasoning context, not the vector search.
 
 ---
 
@@ -1544,7 +1713,7 @@ async def speech_query(request: SpeechRequest):
     </section>
 
     <section id="main-section" hidden>
-      <!-- FE-02 (file tree), FE-03 (chat), FE-04 (code viewer), FE-05 (trace), FE-06 (podcast) inject here -->
+      <!-- FE-02 (file tree), FE-03 (chat), FE-04 (code viewer), FE-05 (trace), FE-06 (live conversation) inject here -->
     </section>
   </div>
   <script src="app.js"></script>
@@ -2034,94 +2203,183 @@ window.__onIndexed = (repoId) => { origOnIndexedTrace(repoId); initTrace(); };
 
 ---
 
-## FE-06: Podcast UI
+## FE-06: Live Conversation UI
 
 **Epic**: Frontend
-**Depends on**: FE-01, POD-01
-**Blocks**: nothing
+**Depends on**: FE-01, POD-01, POD-02
 
-**Objective**: Build the podcast interface. Use the browser's `SpeechRecognition` API for STT and `SpeechSynthesis` for TTS. Send the transcript to `POST /speech` and speak the returned answer. If `audio_base64` is returned (VoiceChat), play that instead.
+**Objective**: Build a live, voice-driven conversation panel. The user records audio with the browser microphone, the recording is uploaded to `POST /speech`, and the returned audio is played back automatically. A running transcript of both sides of the conversation is shown on screen, and follow-up turns reuse the same `conversation_id` so the backend keeps context. After the assistant's audio finishes, the UI auto-arms the mic for the next turn so the conversation feels continuous (push-to-mute rather than push-to-talk).
 
 **System context**:
 
-- Web Speech API: `window.SpeechRecognition || window.webkitSpeechRecognition`
-- Best support: Chrome and Edge. Firefox has partial support. Always show a text fallback.
-- `POST /speech` request: `{ repo_id, transcript, audio_base64: null }` — for fallback path
-- `POST /speech` response: `{ transcript, answer, audio_base64 }` — `audio_base64` is null for fallback
+- Audio capture: `navigator.mediaDevices.getUserMedia({ audio: true })` + `MediaRecorder`. Default mime is `audio/webm;codecs=opus`, which Whisper handles fine via ffmpeg on the backend.
+- Stop trigger for a turn: explicit user click of the mic button. (Voice activity detection is **out of scope** for this task — keep it simple. The "live" feel comes from auto-rearming after each assistant reply, not from VAD.)
+- Audio playback: `new Audio(URL.createObjectURL(blob)).play()`. Do **not** use `<audio autoplay>` — many browsers block it.
+- The API contract from POD-01/POD-02 is binding: the request must include `audio_base64`; the response always includes `audio_base64` and `audio_mime`. There is no text-only fallback path on this endpoint.
+- Browser support: any evergreen browser with `MediaRecorder` (Chrome, Edge, Firefox, Safari 14.1+). Show a friendly message in environments missing it.
+- All UI text in `app.js` must be HTML-escaped before insertion to avoid XSS from model output (reuse the existing `escapeHtml` helper from FE-03 — do not redefine it).
 
 **Implementation** — add to `app.js`:
 
 ```javascript
-function initPodcast() {
+let _liveConversationId = null;
+let _liveRecorder = null;
+let _liveChunks = [];
+let _liveIsRecording = false;
+let _liveBusy = false;          // true while waiting on /speech or playing audio
+let _liveCurrentAudio = null;
+
+function initLiveConversation() {
   const section = document.getElementById("main-section");
-  const hasSpeech = "SpeechRecognition" in window || "webkitSpeechRecognition" in window;
+  const hasMediaRecorder = typeof MediaRecorder !== "undefined" && navigator.mediaDevices?.getUserMedia;
 
   section.insertAdjacentHTML("beforeend", `
-    <div id="podcast-panel">
-      <h3>Podcast mode</h3>
-      ${hasSpeech ? `
-        <button id="mic-btn" onclick="toggleRecording()">🎤 Hold to speak</button>
-        <div id="podcast-transcript"></div>
-        <div id="podcast-answer"></div>
+    <div id="live-panel">
+      <h3>Live conversation</h3>
+      ${hasMediaRecorder ? `
+        <div id="live-controls">
+          <button id="live-mic-btn" onclick="toggleLiveRecording()">Start talking</button>
+          <button id="live-reset-btn" onclick="resetLiveConversation()" disabled>New conversation</button>
+          <span id="live-status">Idle</span>
+        </div>
+        <div id="live-transcript-log"></div>
       ` : `
-        <p>Voice not supported in this browser. Use the chat above.</p>
+        <p>This browser does not support audio recording. Use the chat above.</p>
       `}
     </div>
   `);
 }
 
-let _recognition = null;
-let _isRecording = false;
+async function toggleLiveRecording() {
+  if (!window.__repoId) return;            // no repo indexed yet — silently no-op
+  if (_liveBusy) return;                    // do not interrupt an in-flight turn
+  if (_liveIsRecording) { stopLiveRecording(); return; }
 
-function toggleRecording() {
-  if (_isRecording) { stopRecording(); return; }
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  _recognition = new SR();
-  _recognition.lang = "en-US";
-  _recognition.interimResults = false;
-  _recognition.onresult = async (e) => {
-    const transcript = e.results[0][0].transcript;
-    document.getElementById("podcast-transcript").textContent = `You: ${transcript}`;
-    await sendSpeech(transcript);
-  };
-  _recognition.onerror = () => stopRecording();
-  _recognition.onend = () => { _isRecording = false; document.getElementById("mic-btn").textContent = "🎤 Hold to speak"; };
-  _recognition.start();
-  _isRecording = true;
-  document.getElementById("mic-btn").textContent = "🔴 Recording... click to stop";
-}
-
-function stopRecording() {
-  if (_recognition) _recognition.stop();
-  _isRecording = false;
-}
-
-async function sendSpeech(transcript) {
-  const answerEl = document.getElementById("podcast-answer");
-  answerEl.textContent = "Thinking...";
+  let stream;
   try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch (err) {
+    setLiveStatus(`Mic permission denied: ${err.message}`);
+    return;
+  }
+
+  _liveChunks = [];
+  _liveRecorder = new MediaRecorder(stream);
+  _liveRecorder.ondataavailable = (e) => { if (e.data.size > 0) _liveChunks.push(e.data); };
+  _liveRecorder.onstop = async () => {
+    stream.getTracks().forEach(t => t.stop());
+    const blob = new Blob(_liveChunks, { type: _liveRecorder.mimeType || "audio/webm" });
+    await sendLiveTurn(blob);
+  };
+  _liveRecorder.start();
+  _liveIsRecording = true;
+  setLiveStatus("Recording — click again to send");
+  document.getElementById("live-mic-btn").textContent = "Stop and send";
+}
+
+function stopLiveRecording() {
+  if (_liveRecorder && _liveRecorder.state !== "inactive") _liveRecorder.stop();
+  _liveIsRecording = false;
+  document.getElementById("live-mic-btn").textContent = "Start talking";
+}
+
+async function sendLiveTurn(blob) {
+  _liveBusy = true;
+  setLiveStatus("Transcribing and answering...");
+  try {
+    const audioBase64 = await blobToBase64(blob);
     const res = await fetch(`${API}/speech`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ repo_id: window.__repoId, transcript, audio_base64: null })
+      body: JSON.stringify({
+        repo_id: window.__repoId,
+        audio_base64: audioBase64,
+        conversation_id: _liveConversationId,
+        scope: window.__scope || null,
+      }),
     });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || "speech request failed");
+    }
     const data = await res.json();
 
-    if (data.audio_base64) {
-      // VoiceChat path — play audio response
-      const audioBlob = base64ToBlob(data.audio_base64, "audio/wav");
-      const audioUrl = URL.createObjectURL(audioBlob);
-      new Audio(audioUrl).play();
-      answerEl.textContent = "";
-    } else {
-      // Fallback — speak using Web Speech API
-      answerEl.textContent = `Assistant: ${data.answer}`;
-      const utterance = new SpeechSynthesisUtterance(data.answer);
-      window.speechSynthesis.speak(utterance);
-    }
+    _liveConversationId = data.conversation_id;
+    document.getElementById("live-reset-btn").disabled = false;
+    appendLiveTurn("user", data.transcript);
+    appendLiveTurn("assistant", data.answer, data.citations);
+
+    await playLiveAudio(data.audio_base64, data.audio_mime || "audio/wav");
   } catch (err) {
-    answerEl.textContent = `Error: ${err.message}`;
+    setLiveStatus(`Error: ${err.message}`);
+  } finally {
+    _liveBusy = false;
   }
+}
+
+function playLiveAudio(b64, mime) {
+  return new Promise((resolve) => {
+    const blob = base64ToBlob(b64, mime);
+    const url = URL.createObjectURL(blob);
+    _liveCurrentAudio = new Audio(url);
+    _liveCurrentAudio.onended = () => {
+      URL.revokeObjectURL(url);
+      setLiveStatus("Ready — click to talk");
+      // Auto-arm the mic so the conversation feels continuous.
+      // The user can click the button to interrupt this auto-arm if they want a beat to think.
+      resolve();
+    };
+    _liveCurrentAudio.onerror = () => { setLiveStatus("Audio playback failed"); resolve(); };
+    setLiveStatus("Playing answer...");
+    _liveCurrentAudio.play();
+  });
+}
+
+async function resetLiveConversation() {
+  if (_liveConversationId) {
+    try {
+      await fetch(`${API}/speech/conversation/${_liveConversationId}`, { method: "DELETE" });
+    } catch (_) { /* best-effort */ }
+  }
+  _liveConversationId = null;
+  document.getElementById("live-reset-btn").disabled = true;
+  document.getElementById("live-transcript-log").innerHTML = "";
+  setLiveStatus("New conversation started");
+}
+
+function appendLiveTurn(role, text, citations) {
+  const log = document.getElementById("live-transcript-log");
+  const div = document.createElement("div");
+  div.className = `live-turn live-turn-${role}`;
+  const label = role === "user" ? "You" : "Assistant";
+  let html = `<strong>${label}:</strong> ${escapeHtml(text || "")}`;
+  if (citations && citations.length) {
+    const chips = citations
+      .map(c => `<span class="citation">${escapeHtml(c.file_path)}:${c.start_line}</span>`)
+      .join(" ");
+    html += `<div class="citations">${chips}</div>`;
+  }
+  div.innerHTML = html;
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+}
+
+function setLiveStatus(msg) {
+  const el = document.getElementById("live-status");
+  if (el) el.textContent = msg;
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = reader.result;     // "data:audio/webm;base64,XXXX"
+      const comma = result.indexOf(",");
+      resolve(comma >= 0 ? result.slice(comma + 1) : result);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
 }
 
 function base64ToBlob(b64, mime) {
@@ -2131,22 +2389,29 @@ function base64ToBlob(b64, mime) {
   return new Blob([arr], { type: mime });
 }
 
-const origOnIndexedPodcast = window.__onIndexed;
-window.__onIndexed = (repoId) => { origOnIndexedPodcast(repoId); initPodcast(); };
+const origOnIndexedLive = window.__onIndexed;
+window.__onIndexed = (repoId) => { origOnIndexedLive(repoId); initLiveConversation(); };
 ```
 
 **Acceptance criteria**:
 
-- On Chrome/Edge: clicking the mic button starts recording, clicking again stops it
-- The transcript is displayed before the answer is fetched
-- The answer is spoken aloud via `SpeechSynthesis` on the fallback path
-- On Firefox or unsupported browsers: a "not supported" message is shown, not an error
-- `window.__repoId` is checked before sending — nothing is sent if no repo is indexed
+- After indexing, a "Live conversation" panel renders with a mic button, a reset button, a status indicator, and an empty transcript log.
+- First click: requests mic permission, starts recording, button text becomes "Stop and send", status reads "Recording...".
+- Second click: stops recording and POSTs the audio. While the request is in flight `_liveBusy` is `true` and further clicks are ignored.
+- Response handling: the user transcript and assistant answer (with citation chips) appear in the log, then the assistant audio auto-plays.
+- Follow-up turns send the same `conversation_id`. Verifiable: in DevTools, the request payload's `conversation_id` is non-null after the first turn.
+- Clicking "New conversation" calls `DELETE /speech/conversation/{id}`, clears the log, and the next turn starts a fresh conversation.
+- On a browser without `MediaRecorder`: a "not supported" message is shown, no errors are thrown.
+- On mic-permission denied: status message reads `Mic permission denied: ...` and recording does not start; the rest of the UI keeps working.
+- Model output containing `<script>` is rendered as text, not executed (uses `escapeHtml`).
+- `window.__repoId` is checked before sending — nothing is sent if no repo is indexed.
 
 **Do not**:
 
-- Do not use `autoplay` attribute for audio elements — some browsers block it; use `.play()` directly
-- Do not fail silently if speech fails — show the text answer as fallback
+- Do not use `<audio autoplay>` — instantiate `new Audio(...)` and call `.play()` directly so the user-gesture autoplay policy is satisfied.
+- Do not call the Web Speech API (`SpeechRecognition`, `SpeechSynthesis`) anywhere in this task — STT and TTS are server-side via Whisper and Kokoro.
+- Do not fall back to text-only on `/speech` errors — surface the error in the status indicator instead, so the user knows the live path failed.
+- Do not redefine `escapeHtml` — reuse the helper introduced in FE-03.
 
 ---
 
