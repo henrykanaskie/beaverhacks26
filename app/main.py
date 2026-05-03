@@ -26,12 +26,12 @@ def health():
 
 
 # Import and include routers once each module is implemented
-# from ingest import router as ingest_router
+from ingest import router as ingest_router
 # from query import router as query_router
 # from files import router as files_router
 # from trace import router as trace_router
 # from speech import router as speech_router
-# app.include_router(ingest_router)
+app.include_router(ingest_router)
 # app.include_router(query_router)
 # app.include_router(files_router)
 # app.include_router(trace_router)
