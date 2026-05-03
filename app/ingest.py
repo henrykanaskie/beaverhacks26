@@ -370,8 +370,11 @@ async def index_repo(request: IndexRequest, background_tasks: BackgroundTasks):
     validate_url(request.repo_url)
     repo_id = get_repo_id(request.repo_url)
 
-    # Already indexed — return immediately unless collection is empty (failed/interrupted run).
-    if collection_exists(repo_id):
+    files_json_path = f"deps/{repo_id}_files.json"
+
+    # Already indexed — only short-circuit when BOTH collection and files.json exist.
+    # If files.json is missing the previous run failed partway; fall through to re-index.
+    if collection_exists(repo_id) and os.path.exists(files_json_path):
         collection = get_or_create_collection(repo_id)
         n = collection.count()
         if n > 0:
@@ -380,6 +383,9 @@ async def index_repo(request: IndexRequest, background_tasks: BackgroundTasks):
                 "status": "already_indexed",
                 "chunk_count": n,
             }
+
+    # Stale/partial collection — wipe so we start clean
+    if collection_exists(repo_id):
         try:
             get_client().delete_collection(repo_id)
         except Exception:
