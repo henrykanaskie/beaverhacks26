@@ -1053,11 +1053,12 @@ function formatAnswer(text, citations) {
 //   async send(text, ctx) -> responseObj  — performs fetch, returns raw data
 //   render(responseObj, bubbleEl, ctx)    — builds DOM inside the assistant bubble
 
-async function qaSend(text) {
+async function qaSend(text, ctx) {
   const res = await fetch(`${API}/query`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ repo_id: REPO_ID, question: text, scope: currentScope || null }),
+    signal: ctx?.signal,
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.detail || "Query failed");
@@ -1102,11 +1103,12 @@ function qaRender(data, bubble) {
   }
 }
 
-async function narrativeSend(text) {
+async function narrativeSend(text, ctx) {
   const res = await fetch(`${API}/narrative/${encodeURIComponent(REPO_ID)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ question: text }),
+    signal: ctx?.signal,
   });
   const data = await res.json();
   if (!res.ok) {
@@ -1477,18 +1479,37 @@ document.querySelectorAll(".mode-btn").forEach(btn => {
   btn.addEventListener("click", () => setChatMode(btn.dataset.mode));
 });
 
+let activeController = null;
+
+function setSendBtnState(state) {
+  if (state === "stop") {
+    sendBtn.textContent = "■";
+    sendBtn.title = "stop answering";
+    sendBtn.dataset.mode = "stop";
+    sendBtn.disabled = false;
+  } else {
+    sendBtn.textContent = "↑";
+    sendBtn.title = "";
+    sendBtn.dataset.mode = "send";
+    sendBtn.disabled = false;
+  }
+}
+
 async function sendMessage() {
   const text = inputEl.value.trim();
   if (!text) return;
   const mode = currentMode;
+  const originalInput = inputEl.value;
   inputEl.value = ""; inputEl.style.height = "auto";
-  sendBtn.disabled = true;
+  const controller = new AbortController();
+  activeController = controller;
+  setSendBtnState("stop");
   appendMsg("user", esc(text));
   showThinking();
 
   // Build an empty assistant bubble upfront so mode.render can populate it
   try {
-    const data = await mode.send(text, { REPO_ID, API });
+    const data = await mode.send(text, { REPO_ID, API, signal: controller.signal });
     removeThinking();
     const wrap = document.createElement("div");
     wrap.className = "msg msg-assistant";
@@ -1503,6 +1524,15 @@ async function sendMessage() {
     mode.render(data, bubble, { REPO_ID, API });
     messagesEl.scrollTop = messagesEl.scrollHeight;
   } catch (err) {
+    if (err?.name === "AbortError" || controller.signal.aborted) {
+      removeThinking();
+      appendMsg("assistant", `<span style="color:var(--text-3);font-style:italic">response stopped</span>`, null);
+      inputEl.value = originalInput;
+      inputEl.style.height = "auto";
+      inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + "px";
+      inputEl.focus();
+      return;
+    }
     removeThinking();
     let html = `<span style="color:var(--red)">${esc(String(err.message || err))}</span>`;
     if (err.raw) {
@@ -1511,12 +1541,25 @@ async function sendMessage() {
     }
     appendMsg("assistant", html, null);
   } finally {
-    sendBtn.disabled = false;
+    if (activeController === controller) activeController = null;
+    setSendBtnState("send");
   }
 }
 
-sendBtn.addEventListener("click", sendMessage);
-inputEl.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
+sendBtn.addEventListener("click", () => {
+  if (sendBtn.dataset.mode === "stop") {
+    activeController?.abort();
+  } else {
+    sendMessage();
+  }
+});
+inputEl.addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    if (activeController) return;
+    sendMessage();
+  }
+});
 inputEl.addEventListener("input", () => { inputEl.style.height = "auto"; inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + "px"; });
 // Set initial placeholder from the default mode
 inputEl.placeholder = currentMode.placeholder;
