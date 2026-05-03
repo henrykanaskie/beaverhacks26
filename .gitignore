@@ -10,3 +10,4 @@ app/chroma_data/
 clones/
 app/clones/
 app/deps/*.json
+.claude
