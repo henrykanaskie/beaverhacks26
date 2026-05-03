@@ -1,28 +1,18 @@
-import os
 import re
 
 from fastapi import APIRouter, HTTPException
-from llama_index.llms.nvidia import NVIDIA
 from pydantic import BaseModel
 from sentence_transformers import CrossEncoder
 
 from db import collection_exists, get_or_create_collection
+from llm import get_llm
 
 router = APIRouter()
 
-_llm = None
-
 
 def _get_llm():
-    global _llm
-    if _llm is None:
-        _llm = NVIDIA(
-            model="nvidia/llama-3.3-nemotron-super-49b-v1.5",
-            api_key=os.getenv("NVIDIA_API_KEY"),
-            temperature=0.1,
-            max_tokens=1024,
-        )
-    return _llm
+    """Back-compat shim around the role-based llm.get_llm(). Use get_llm('qa') directly in new code."""
+    return get_llm("qa")
 
 
 def build_prompt(question: str, chunks: list[dict]) -> str:
