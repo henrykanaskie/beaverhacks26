@@ -442,7 +442,7 @@ Respond with ONLY a single JSON object, no prose, no code fences:
 
 Guidelines:
 - involved_files: 1-5 files from the provided context that are core to THIS component. Each needs a short role description.
-- tools: 1-6 external libraries, frameworks, or services the component uses (e.g. "FastAPI", "ChromaDB", "sentence-transformers"). Leave empty [] if not obvious.
+- tools: REQUIRED. 2-8 external libraries, frameworks, languages, or services that make up this component's tech stack (e.g. "FastAPI", "ChromaDB", "sentence-transformers", "Python", "D3.js"). Infer from imports, file extensions, and code patterns in the CODE CONTEXT. Only return [] if there is genuinely no code context at all.
 - citations: 2-4 (file_path, start_line) pairs from the CODE CONTEXT that support the deep_dive.
 - Do NOT invent files that are not in the provided context.
 - Do NOT reference other components except in passing to orient the reader.

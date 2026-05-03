@@ -8,25 +8,34 @@ import ast
 import json
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 _JS_LIKE = {"javascript", "typescript", "tsx"}
 _RESOLUTION_EXTS = (".py", ".js", ".ts", ".tsx", ".jsx")
 
 
-def build_dependency_graph(files: list[dict], clone_path: str, repo_id: str) -> dict:
+def build_dependency_graph(
+    files: list[dict], clone_path: str, repo_id: str, max_workers: int | None = None
+) -> dict:
     """Build reverse dependency graph and persist to deps/{repo_id}_deps.json.
 
     Returns: { file_rel_path: [files_that_import_it] }
+
+    Per-file `_extract_imports` runs concurrently across a small thread pool —
+    file I/O dominates and AST parsing is small. Resolution and reverse-graph
+    construction stay in the main thread.
     """
     file_set = {f["rel_path"] for f in files}
-    forward: dict[str, list[str]] = {}
+    workers = max_workers or min(8, (os.cpu_count() or 4))
 
-    for file_info in files:
-        imports = _extract_imports(file_info["path"], file_info["language"])
-        forward[file_info["rel_path"]] = _resolve_imports(
-            imports, file_info["rel_path"], file_set
-        )
+    def _extract_for(file_info: dict) -> tuple[str, list[str]]:
+        return file_info["rel_path"], _extract_imports(file_info["path"], file_info["language"])
+
+    forward: dict[str, list[str]] = {}
+    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="deps") as ex:
+        for rel_path, imports in ex.map(_extract_for, files):
+            forward[rel_path] = _resolve_imports(imports, rel_path, file_set)
 
     reverse: dict[str, list[str]] = {f: [] for f in file_set}
     for src, targets in forward.items():
