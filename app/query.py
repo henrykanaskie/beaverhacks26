@@ -30,11 +30,12 @@ def build_prompt(question: str, chunks: list[dict]) -> str:
     for chunk in chunks:
         meta = chunk["metadata"]
         language = meta.get("language", "")
-        chunks_block += f"[{meta['file_path']}:{meta['start_line']}]\n"
+        end = meta.get('end_line', meta['start_line'])
+        chunks_block += f"[{meta['file_path']}:{meta['start_line']}-{end}]\n"
         chunks_block += f"```{language}\n{chunk['text']}\n```\n\n"
 
     return f"""You are a senior software engineer assistant. Answer the question using ONLY the code context provided below.
-For every piece of code you reference in your answer, cite its source using the format [file_path:line_number].
+For every piece of code you reference in your answer, cite its source INLINE using the format [file_path:start_line-end_line] (e.g. [src/app.py:42-58]). If only a single line is relevant, use [file_path:line]. Place citations directly next to the claims they support, not just at the end.
 If the answer cannot be determined from the provided context, say "I cannot determine this from the available code."
 Do not hallucinate code that is not in the context.
 
@@ -46,20 +47,34 @@ ANSWER:"""
 
 
 def extract_citations(answer: str, chunks: list[dict]) -> list[dict]:
-    """Extract [file_path:line] citations from the answer text."""
-    pattern = r'\[([^\]]+):(\d+)\]'
-    found = re.findall(pattern, answer)
+    """Extract inline [file:start-end] or [file:line] citations, preserving order."""
+    # Build lookup: (file_path, start_line) -> end_line from retrieved chunks
+    chunk_end: dict[tuple, int] = {}
+    for chunk in chunks:
+        m = chunk["metadata"]
+        chunk_end[(m["file_path"], m["start_line"])] = m.get("end_line", m["start_line"])
+
+    # Match both [file:start-end] and [file:line]
+    pattern = r'\[([^\]:\n]+):(\d+)(?:-(\d+))?\]'
     citations = []
-    seen = set()
-    for file_path, line_str in found:
-        key = (file_path, line_str)
+    seen: set = set()
+    for m in re.finditer(pattern, answer):
+        file_path = m.group(1)
+        start = int(m.group(2))
+        # Prefer explicit end from citation; fall back to chunk metadata
+        end = int(m.group(3)) if m.group(3) else chunk_end.get((file_path, start), start)
+        key = (file_path, start, end)
         if key not in seen:
             seen.add(key)
-            citations.append({"file_path": file_path, "start_line": int(line_str)})
+            citations.append({"file_path": file_path, "start_line": start, "end_line": end})
     if not citations and chunks:
         for chunk in chunks[:3]:
-            m = chunk["metadata"]
-            citations.append({"file_path": m["file_path"], "start_line": m["start_line"]})
+            meta = chunk["metadata"]
+            citations.append({
+                "file_path": meta["file_path"],
+                "start_line": meta["start_line"],
+                "end_line": meta.get("end_line", meta["start_line"]),
+            })
     return citations
 
 # Reranker loaded ONCE at module level — not per request

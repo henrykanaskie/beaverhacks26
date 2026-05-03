@@ -254,6 +254,7 @@
     .line-content {
       flex: 1; padding-right: 32px;
       font-family: var(--font-code); font-size: 12.5px; line-height: 1.72;
+      white-space: pre;
     }
     .line-hl { background: rgba(224,175,104,.1); border-left: 2px solid var(--yellow); }
     .line-hl .line-num { color: var(--yellow); }
@@ -483,7 +484,9 @@ function codeLayerId(filePath) {
   return "code-" + filePath.replace(/[^a-zA-Z0-9]/g, "_");
 }
 
-async function openCodeViewer(filePath, targetLine) {
+async function openCodeViewer(filePath, startLine, endLine) {
+  const targetLine = startLine || null;
+  endLine = endLine || startLine;
   let file = FILES[filePath];
   if (!file && REPO_ID) {
     try {
@@ -537,17 +540,19 @@ async function openCodeViewer(filePath, targetLine) {
     openFiles.set(filePath, layerId);
   }
 
-  // Highlight the target line (clear previous highlights first)
+  // Highlight line range (clear previous highlights first)
   const linesEl = document.getElementById(`code-lines-${layerId}`);
   linesEl.querySelectorAll(".line-hl").forEach(el => el.classList.remove("line-hl"));
   if (targetLine) {
-    const hlRow = linesEl.querySelector(`[data-line="${targetLine}"]`);
-    if (hlRow) hlRow.classList.add("line-hl");
+    const end = endLine || targetLine;
+    for (let ln = targetLine; ln <= end; ln++) {
+      const row = linesEl.querySelector(`[data-line="${ln}"]`);
+      if (row) row.classList.add("line-hl");
+    }
   }
 
-  // Update tab label with line number
-  const tabLabel = fname + (targetLine ? `:${targetLine}` : "");
-  ensureTab(layerId, tabLabel, "◧");
+  // Tab label shows file name only (no line suffix — line context is in the highlight)
+  ensureTab(layerId, fname, "◧");
   activateTab(layerId);
 
   if (targetLine) {
@@ -574,7 +579,7 @@ function openTrace(source, affected) {
     el.innerHTML = `<span class="trace-dot ${item.type}"></span>
       <span class="trace-path">${esc(item.path)}</span>
       <span class="trace-badge ${item.type}">${item.type}</span>`;
-    el.addEventListener("click", () => openCodeViewer(item.path, 1));
+    el.addEventListener("click", () => openCodeViewer(item.path, null));
     list.appendChild(el);
   });
 
@@ -606,6 +611,12 @@ function appendMsg(role, html, response) {
   bubble.className = "bubble";
   bubble.innerHTML = html;
 
+  // Wire up inline citation chips injected by formatAnswer
+  bubble.querySelectorAll(".inline-cite").forEach(chip => {
+    chip.addEventListener("click", () =>
+      openCodeViewer(chip.dataset.path, +chip.dataset.start, +chip.dataset.end));
+  });
+
   if (response) {
     if (response.type === "answer" && response.citations?.length) {
       const chips = document.createElement("div");
@@ -613,8 +624,9 @@ function appendMsg(role, html, response) {
       response.citations.forEach(c => {
         const chip = document.createElement("span");
         chip.className = "cite-chip";
-        chip.textContent = `${c.path}:${c.line}`;
-        chip.addEventListener("click", () => openCodeViewer(c.path, c.line));
+            const endStr = c.end_line && c.end_line !== c.start_line ? `-${c.end_line}` : '';
+            chip.textContent = `${c.path}:${c.start_line}${endStr}`;
+        chip.addEventListener("click", () => openCodeViewer(c.path, c.start_line, c.end_line || c.start_line));
         chips.appendChild(chip);
       });
       bubble.appendChild(chips);
@@ -643,13 +655,37 @@ function showThinking() {
 }
 function removeThinking() { document.getElementById("_thinking")?.remove(); }
 
-function formatAnswer(text) {
+function formatAnswer(text, citations) {
   let html = esc(text);
-  // Fenced code blocks
+  // Fenced code blocks (must run before inline-code)
   html = html.replace(/```[\w]*\n([\s\S]*?)```/g, (_, code) =>
     `<pre style="background:rgba(255,255,255,.05);padding:10px 14px;border-radius:6px;overflow-x:auto;font-family:var(--font-code);font-size:12px;margin:8px 0;white-space:pre-wrap"><code>${code}</code></pre>`);
-  // Inline code
-  html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+  // Inline code — file paths become clickable cite-chips; other code stays <code>
+  html = html.replace(/`([^`\n]+)`/g, (_, inner) => {
+    // Looks like a file path: contains / or . and a recognised extension
+    if (/[./]/.test(inner) && /\.(py|js|ts|tsx|jsx|go|rs|java|cpp|cs|rb|md|toml|yaml|yml|json|sh|env)$/i.test(inner.trim())) {
+      const filePath = inner.trim();
+      return `<span class="cite-chip inline-cite" data-path="${esc(filePath)}" data-start="0" data-end="0">${esc(filePath.split('/').pop())}</span>`;
+    }
+    return `<code>${inner}</code>`;
+  });
+  // Headings
+  html = html.replace(/^### (.+)$/gm, '<strong style="font-size:13px;color:var(--text-1)">$1</strong>');
+  html = html.replace(/^## (.+)$/gm,  '<strong style="font-size:14px;color:var(--text-1)">$1</strong>');
+  html = html.replace(/^# (.+)$/gm,   '<strong style="font-size:15px;color:var(--text-1)">$1</strong>');
+  // Bold / italic
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/\*([^*\n]+)\*/g,  '<em>$1</em>');
+  // Inline citation markers [path:line] or [path:start-end] → cite-chip spans
+  // path arrives already HTML-escaped from esc(text) above, so unescape before re-escaping into attrs
+  html = html.replace(/\[([^\]\n]+):(\d+)(?:-(\d+))?\]/g, (match, escapedPath, start, end) => {
+    const filePath = escapedPath.replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>');
+    const s = parseInt(start, 10);
+    const e = end ? parseInt(end, 10) : s;
+    const endStr = e !== s ? `-${e}` : '';
+    const fname = esc(filePath.split('/').pop());
+    return `<span class="cite-chip inline-cite" data-path="${esc(filePath)}" data-start="${s}" data-end="${e}">${fname}:${s}${endStr}</span>`;
+  });
   // Newlines
   html = html.replace(/\n/g, '<br>');
   return html;
@@ -673,9 +709,11 @@ async function sendMessage() {
     removeThinking();
     const response = {
       type: "answer",
-      citations: (data.citations || []).map(c => ({ path: c.file_path, line: c.start_line })),
+      citations: (data.citations || []).map(c => ({
+        path: c.file_path, start_line: c.start_line, end_line: c.end_line || c.start_line,
+      })),
     };
-    appendMsg("assistant", formatAnswer(data.answer), response);
+    appendMsg("assistant", formatAnswer(data.answer, response.citations), response);
   } catch (err) {
     removeThinking();
     appendMsg("assistant", `<span style="color:var(--red)">${esc(String(err.message || err))}</span>`, null);
@@ -778,7 +816,7 @@ function initArch(treeData) {
     const enter = node.enter().append("g").attr("class","an")
       .attr("transform", `translate(${src.y0},${src.x0})`).style("cursor","pointer")
       .on("click", (_, d) => {
-        if (d.data.type === "file") { openCodeViewer(d.data.id, 1); return; }
+        if (d.data.type === "file") { openCodeViewer(d.data.id, null); return; }
         if (d.children) { d._children = d.children; d.children = null; }
         else { d.children = d._children; d._children = null; }
         update(d);
