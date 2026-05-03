@@ -25,7 +25,7 @@ indexes the code, and lets users interact via four features:
 | Backend              | FastAPI + uvicorn (Python 3.11+)                                      |
 | Git cloning          | GitPython                                                             |
 | Code chunking        | LlamaIndex CodeSplitter (AST-based, tree-sitter backend)              |
-| Embedding            | nomic-embed-code-v1 via Nomic API (llama-index-embeddings-nomic)      |
+| Embedding            | Salesforce/codet5p-110m-embedding (local, via transformers)           |
 | Vector store         | Chroma DB                                                             |
 | Reranker             | cross-encoder/ms-marco-MiniLM-L-6-v2 via SentenceTransformers (local) |
 | LLM (text)           | nvidia/llama-3.1-nemotron-70b-instruct via NVIDIA API Catalog         |
@@ -62,9 +62,8 @@ requirements.txt
 
 ```
 NVIDIA_API_KEY=...          # From build.nvidia.com
-NOMIC_API_KEY=...           # From nomic.ai
 MAX_FILES_PER_REPO=2000     # File count guard — reject repos above this
-CLONE_TIMEOUT_SECONDS=60    # Kill clone if it exceeds this
+CLONE_TIMEOUT_SECONDS=600   # Kill clone if it exceeds this
 ```
 
 ## Key constants (hardcoded, never change these without updating all tasks)
@@ -92,10 +91,11 @@ metadata = {
 
 ## Embedding rules (CRITICAL — violating these silently breaks retrieval)
 
-- Model: `nomic-embed-code-v1` — used for BOTH ingestion and queries, no exceptions
-- Ingestion: `input_type="search_document"`
-- Query time: `input_type="search_query"`
-- Never mix with any other embedding model
+- Model: `Salesforce/codet5p-110m-embedding` — runs locally via `transformers` + `torch`, no API key needed
+- Used for BOTH ingestion and queries, no exceptions
+- Loaded once via `AutoModel.from_pretrained("Salesforce/codet5p-110m-embedding", trust_remote_code=True)`
+- Fallback: `all-MiniLM-L6-v2` via `chromadb.utils.embedding_functions.SentenceTransformerEmbeddingFunction` if CodeT5+ fails to load
+- Never mix embedding models between ingestion and query — if you re-embed, re-index everything
 
 ## Complete API contracts
 
@@ -208,11 +208,12 @@ uvicorn[standard]==0.30.6
 gitpython==3.1.43
 llama-index==0.12.0
 llama-index-llms-nvidia
-llama-index-embeddings-nomic
 chromadb==0.5.15
-sentence-transformers==3.1.1
-tree-sitter==0.21.3
+transformers
+torch
+tree-sitter>=0.25.2
 python-dotenv==1.0.1
+tree-sitter-language-pack==1.6.2
 ```
 
 1. Run: `pip install -r /app/requirements.txt`
@@ -220,14 +221,18 @@ python-dotenv==1.0.1
 
 ```
 NVIDIA_API_KEY=REPLACE_ME
-NOMIC_API_KEY=REPLACE_ME
 MAX_FILES_PER_REPO=2000
-CLONE_TIMEOUT_SECONDS=60
+CLONE_TIMEOUT_SECONDS=600
 ```
 
-1. Pre-download the reranker model so it is never downloaded at query time:
+1. Pre-download models so they are never downloaded at request time:
 
 ```python
+from transformers import AutoModel, AutoTokenizer
+AutoTokenizer.from_pretrained("Salesforce/codet5p-110m-embedding", trust_remote_code=True)
+AutoModel.from_pretrained("Salesforce/codet5p-110m-embedding", trust_remote_code=True)
+print("CodeT5+ embedding model downloaded successfully")
+
 from sentence_transformers import CrossEncoder
 CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
 print("Reranker downloaded successfully")
@@ -243,17 +248,18 @@ print("Reranker downloaded successfully")
 - `/app/clones/` directory (empty)
 - `/app/static/` directory (empty)
 - All `.py` stub files
+- CodeT5+ model cached at `~/.cache/huggingface/hub/`
 - Reranker model cached at `~/.cache/torch/sentence_transformers/`
 
 **Acceptance criteria**:
 
-- `python -c "import fastapi, chromadb, gitpython, llama_index, sentence_transformers"` exits with code 0
-- `python -c "from sentence_transformers import CrossEncoder; CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')"` loads without downloading (uses cache)
+- `python -c "import fastapi, chromadb, llama_index, transformers, torch"` exits with code 0
+- `python -c "from transformers import AutoModel; AutoModel.from_pretrained('Salesforce/codet5p-110m-embedding', trust_remote_code=True)"` loads successfully
 - All directories exist: `/app/deps/`, `/app/clones/`, `/app/static/`
 
 **Do not**:
 
-- Do not install voyageai, openai, anthropic, or any other LLM/embedding library — Nomic and NVIDIA only
+- Do not install voyageai, openai, anthropic, or any other LLM/embedding library — Salesforce CodeT5+ (local) and NVIDIA only
 - Do not hardcode real API keys in any file
 
 ---
@@ -815,22 +821,21 @@ def _generate_candidates(imp: str, source_dir: str) -> list[str]:
 
 ---
 
-## ING-06: Nomic embedding and Chroma DB write
+## ING-06: CodeT5+ embedding and Chroma DB write
 
 **Epic**: Ingestion
 **Depends on**: ING-04, INFRA-03
 **Blocks**: ING-07
 
-**Objective**: Embed all code chunks using nomic-embed-code-v1 in batches of 128, then write each chunk vector with its metadata to the Chroma collection for this repo.
+**Objective**: Embed all code chunks using Salesforce/codet5p-110m-embedding (local) in batches of 128, then write each chunk vector with its metadata to the Chroma collection for this repo.
 
 **System context**:
 
-- Embedding model: `nomic-embed-code-v1`
-- input_type for ingestion: `search_document` — CRITICAL, do not use `search_query` here
-- Batch size: 128 chunks per API call — do not send all chunks at once
+- Embedding model: `Salesforce/codet5p-110m-embedding` — runs locally via `transformers`, no API key
+- Batch size: 128 chunks per embedding call
 - Chroma collection name = `repo_id`
 - Each Chroma document needs: a unique ID, the embedding vector, the text, and the metadata dict
-- Unique ID per chunk: `f"{repo_id}_{file_path}_{start_line}"` (URL-safe, deterministic)
+- Unique ID per chunk: `f"{repo_id}_{file_path}_{start_line}_{hash8}"` (deterministic, collision-resistant)
 
 **Implementation**:
 
@@ -838,19 +843,23 @@ Add to `/app/ingest.py`:
 
 ```python
 import os
-from llama_index.embeddings.nomic import NomicEmbedding
+import hashlib
+import torch
+from transformers import AutoModel, AutoTokenizer
 from db import get_or_create_collection
 
+_tokenizer = AutoTokenizer.from_pretrained("Salesforce/codet5p-110m-embedding", trust_remote_code=True)
+_model = AutoModel.from_pretrained("Salesforce/codet5p-110m-embedding", trust_remote_code=True)
+_model.eval()
+
+def _embed_batch(texts: list[str]) -> list[list[float]]:
+    inputs = _tokenizer(texts, padding=True, truncation=True, max_length=512, return_tensors="pt")
+    with torch.no_grad():
+        outputs = _model(**inputs)
+    return outputs.tolist()
+
 def embed_and_store(chunks: list[dict], repo_id: str) -> int:
-    """
-    Embed chunks in batches and write to Chroma. Returns total chunks stored.
-    Uses nomic-embed-code-v1 with input_type=search_document.
-    """
-    embed_model = NomicEmbedding(
-        api_key=os.getenv("NOMIC_API_KEY"),
-        model_name="nomic-embed-code-v1",
-        task_type="search_document"         # MUST be search_document for ingestion
-    )
+    """Embed chunks in batches and write to Chroma. Returns total chunks stored."""
     collection = get_or_create_collection(repo_id)
     batch_size = 128
     total_stored = 0
@@ -858,18 +867,9 @@ def embed_and_store(chunks: list[dict], repo_id: str) -> int:
     for i in range(0, len(chunks), batch_size):
         batch = chunks[i:i + batch_size]
         texts = [c["text"] for c in batch]
+        embeddings = _embed_batch(texts)
 
-        # Embed with retry on rate limit
-        for attempt in range(3):
-            try:
-                embeddings = embed_model.get_text_embedding_batch(texts)
-                break
-            except Exception as e:
-                if attempt == 2:
-                    raise
-                import time; time.sleep(2 ** attempt)
-
-        ids = [f"{repo_id}_{c['file_path']}_{c['start_line']}" for c in batch]
+        ids = [_chunk_id(repo_id, c) for c in batch]
         metadatas = [{
             "file_path": c["file_path"],
             "language": c["language"],
@@ -891,15 +891,15 @@ def embed_and_store(chunks: list[dict], repo_id: str) -> int:
 
 **Acceptance criteria**:
 
-- After embedding `pallets/flask`, `collection.count()` is > 0
+- After embedding a repo, `collection.count()` is > 0
 - Each stored document has all 5 metadata fields: `file_path`, `language`, `start_line`, `end_line`, `content_type`
 - IDs are deterministic — re-running embedding on the same file produces the same IDs
-- Rate limit errors trigger retry with backoff — not immediate failure
+- No API key or network connection required for embedding
 
 **Do not**:
 
-- Do not use `task_type="search_query"` — that is only for query time
-- Do not send more than 128 texts in a single API call
+- Do not use any remote embedding API (Nomic, OpenAI, etc.)
+- Do not send more than 128 texts in a single batch
 
 ---
 
@@ -1012,14 +1012,14 @@ Uncomment all router imports in `main.py` once all router files exist.
 **Depends on**: ING-07, INFRA-03
 **Blocks**: GEN-01
 
-**Objective**: Implement `POST /query`. Embed the query with Nomic (using `search_query` input_type), perform similarity search in the correct Chroma collection with an optional scope filter, and rerank the top-20 results to top-5.
+**Objective**: Implement `POST /query`. Embed the query with CodeT5+ (same local model used at ingestion), perform similarity search in the correct Chroma collection with an optional scope filter, and rerank the top-20 results to top-5.
 
 **System context**:
 
-- Embedding must use `input_type="search_query"` — NOT `search_document` (that is for ingestion)
+- Embedding must use the SAME model as ingestion (`Salesforce/codet5p-110m-embedding`) — mixing models breaks retrieval
 - Scope: if `scope` is provided in the request (e.g., `"auth/"`), add a Chroma `where` filter: `{"file_path": {"$contains": scope}}`. This narrows retrieval without separate collections.
 - Similarity search: `n_results=20` (before reranking)
-- Reranker: `cross-encoder/ms-marco-MiniLM-L-6-v2` — ALREADY DOWNLOADED at setup (INFRA-01). Load once at module level, not per request.
+- Reranker: `cross-encoder/ms-marco-MiniLM-L-6-v2` — load once at module level, not per request.
 - Reranker input: list of (query, passage) tuples. Output: scores. Take top-5 by score.
 
 **Implementation**:
@@ -1027,11 +1027,11 @@ Uncomment all router imports in `main.py` once all router files exist.
 Create `/app/query.py`:
 
 ```python
-import os
+import torch
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from sentence_transformers import CrossEncoder
-from llama_index.embeddings.nomic import NomicEmbedding
+from transformers import AutoModel, AutoTokenizer
 from db import get_or_create_collection, collection_exists
 
 router = APIRouter()
@@ -1039,13 +1039,16 @@ router = APIRouter()
 # Load reranker ONCE at module level — not per request
 _reranker = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
 
-# Embed model for query time
-def _get_embed_model():
-    return NomicEmbedding(
-        api_key=os.getenv("NOMIC_API_KEY"),
-        model_name="nomic-embed-code-v1",
-        task_type="search_query"    # MUST be search_query for query time
-    )
+# Load embedding model ONCE — same model as ingestion (CodeT5+)
+_tokenizer = AutoTokenizer.from_pretrained("Salesforce/codet5p-110m-embedding", trust_remote_code=True)
+_embed_model = AutoModel.from_pretrained("Salesforce/codet5p-110m-embedding", trust_remote_code=True)
+_embed_model.eval()
+
+def _embed_query(text: str) -> list[float]:
+    inputs = _tokenizer([text], padding=True, truncation=True, max_length=512, return_tensors="pt")
+    with torch.no_grad():
+        outputs = _embed_model(**inputs)
+    return outputs[0].tolist()
 
 class QueryRequest(BaseModel):
     repo_id: str
@@ -1057,9 +1060,8 @@ async def query_repo(request: QueryRequest):
     if not collection_exists(request.repo_id):
         raise HTTPException(status_code=404, detail="Repo not indexed")
 
-    # Embed the query
-    embed_model = _get_embed_model()
-    query_embedding = embed_model.get_text_embedding(request.question)
+    # Embed the query (same CodeT5+ model used at ingestion)
+    query_embedding = _embed_query(request.question)
 
     # Build Chroma where filter for scope
     where = None
@@ -1316,7 +1318,7 @@ def trace_file(request: TraceRequest):
 
 **Do not**:
 
-- Do not call Chroma, Nomic, or Nemotron in this endpoint — it is pure JSON lookup
+- Do not call Chroma, embedding models, or Nemotron in this endpoint — it is pure JSON lookup
 
 ---
 
@@ -1439,13 +1441,12 @@ async def speech_query(request: SpeechRequest):
         audio_bytes = base64.b64decode(request.audio_base64)
 
         # Get RAG context — use top-3 chunks for VoiceChat (smaller context window)
-        from query import QueryRequest, query_repo, _get_embed_model, _reranker, build_prompt
-        embed_model = _get_embed_model()
+        from query import QueryRequest, query_repo, _embed_query, _reranker, build_prompt
 
         # We need the transcript to retrieve relevant context
         # If transcript not provided, VoiceChat must transcribe first — two-step approach
         if request.transcript:
-            query_embedding = embed_model.get_text_embedding(request.transcript)
+            query_embedding = _embed_query(request.transcript)
             from db import get_or_create_collection
             collection = get_or_create_collection(request.repo_id)
             results = collection.query(query_embeddings=[query_embedding], n_results=10)
