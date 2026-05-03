@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Nemotron RAG — Workspace</title>
+  <title>AccliMate — Workspace</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
@@ -339,7 +339,7 @@
 <body>
 
 <div id="topbar">
-  <span class="logo">⬡ Nemotron RAG</span>
+  <span class="logo"><img src="/logo.png" alt="AccliMate" style="height:20px;vertical-align:middle;margin-right:6px">AccliMate</span>
   <span class="sep">/</span>
   <span class="repo" id="topbar-repo">loading…</span>
   <span class="indexed-badge" id="topbar-indexed"></span>
@@ -627,7 +627,7 @@ function appendMsg(role, html, response) {
 
   const label = document.createElement("span");
   label.className = "msg-label";
-  label.textContent = role === "user" ? "You" : "Nemotron";
+  label.textContent = role === "user" ? "You" : "AccliMate";
   wrap.appendChild(label);
 
   const bubble = document.createElement("div");
