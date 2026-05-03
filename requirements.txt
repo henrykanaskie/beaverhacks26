@@ -6,6 +6,7 @@ llama-index-llms-nvidia>=0.3.0,<0.6
 chromadb==0.5.15
 transformers
 torch
+sentence-transformers
 tree-sitter>=0.25.2
 python-dotenv==1.0.1
 tree-sitter-language-pack==1.6.2

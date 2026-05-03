@@ -1,10 +1,66 @@
+import os
+import re
+
 from fastapi import APIRouter, HTTPException
+from llama_index.llms.nvidia import NVIDIA
 from pydantic import BaseModel
 from sentence_transformers import CrossEncoder
 
 from db import collection_exists, get_or_create_collection
 
 router = APIRouter()
+
+_llm = None
+
+
+def _get_llm():
+    global _llm
+    if _llm is None:
+        _llm = NVIDIA(
+            model="nvidia/llama-3.3-nemotron-super-49b-v1.5",
+            api_key=os.getenv("NVIDIA_API_KEY"),
+            temperature=0.1,
+            max_tokens=1024,
+        )
+    return _llm
+
+
+def build_prompt(question: str, chunks: list[dict]) -> str:
+    chunks_block = ""
+    for chunk in chunks:
+        meta = chunk["metadata"]
+        language = meta.get("language", "")
+        chunks_block += f"[{meta['file_path']}:{meta['start_line']}]\n"
+        chunks_block += f"```{language}\n{chunk['text']}\n```\n\n"
+
+    return f"""You are a senior software engineer assistant. Answer the question using ONLY the code context provided below.
+For every piece of code you reference in your answer, cite its source using the format [file_path:line_number].
+If the answer cannot be determined from the provided context, say "I cannot determine this from the available code."
+Do not hallucinate code that is not in the context.
+
+CONTEXT:
+{chunks_block}
+QUESTION: {question}
+
+ANSWER:"""
+
+
+def extract_citations(answer: str, chunks: list[dict]) -> list[dict]:
+    """Extract [file_path:line] citations from the answer text."""
+    pattern = r'\[([^\]]+):(\d+)\]'
+    found = re.findall(pattern, answer)
+    citations = []
+    seen = set()
+    for file_path, line_str in found:
+        key = (file_path, line_str)
+        if key not in seen:
+            seen.add(key)
+            citations.append({"file_path": file_path, "start_line": int(line_str)})
+    if not citations and chunks:
+        for chunk in chunks[:3]:
+            m = chunk["metadata"]
+            citations.append({"file_path": m["file_path"], "start_line": m["start_line"]})
+    return citations
 
 # Reranker loaded ONCE at module level — not per request
 _reranker = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
@@ -116,18 +172,24 @@ async def query_repo(request: QueryRequest):
     pairs = [(request.question, doc) for doc in docs]
     scores = _reranker.predict(pairs)
     ranked = sorted(zip(scores, docs, metas), key=lambda x: float(x[0]), reverse=True)
-    top5 = ranked[:5]
+    print(f"[query] top-5 rerank scores: {[round(float(s), 3) for s, _, _ in ranked[:5]]}")
+
+    # Spec says filter scores < 0, but cross-encoder/ms-marco often returns
+    # all-negative logits when scoring natural-language questions against pure
+    # code chunks. Only apply the filter when at least one chunk clears 0;
+    # otherwise fall back to the top-5 and let the LLM decide.
+    positive = [item for item in ranked[:5] if float(item[0]) >= 0]
+    top5 = positive if positive else ranked[:5]
 
     top_chunks = [
         {"text": doc, "metadata": meta, "score": float(score)}
         for score, doc, meta in top5
     ]
 
-    return {
-        "chunks": top_chunks,
-        "answer": "Generation not yet implemented — see GEN-01",
-        "citations": [
-            {"file_path": meta["file_path"], "start_line": meta["start_line"]}
-            for _, _, meta in top5
-        ],
-    }
+    prompt = build_prompt(request.question, top_chunks)
+    llm = _get_llm()
+    response = llm.complete(prompt)
+    answer = str(response)
+    citations = extract_citations(answer, top_chunks)
+
+    return {"answer": answer, "citations": citations}
