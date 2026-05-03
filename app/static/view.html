@@ -311,21 +311,43 @@
     .trace-badge.direct     { background: rgba(247,118,142,.12); color: var(--red);    border: 1px solid rgba(247,118,142,.22); }
     .trace-badge.transitive { background: rgba(224,175,104,.12); color: var(--yellow); border: 1px solid rgba(224,175,104,.22); }
 
-    /* ── Chat mode toggle ── */
-    #mode-toggle {
-      margin-left: auto; display: inline-flex; gap: 2px;
+    /* ── Chat mode select ── */
+    #mode-select {
+      margin-left: auto;
       background: var(--bg-active); border: 1px solid var(--border-md);
-      border-radius: 6px; padding: 2px;
-    }
-    .mode-btn {
+      border-radius: 6px; color: var(--blue);
       font-family: var(--font-ui); font-size: 11px; font-weight: 500;
-      color: var(--text-2); background: none; border: none; border-radius: 4px;
-      padding: 4px 10px; cursor: pointer; transition: background .12s, color .12s;
+      padding: 4px 22px 4px 10px; cursor: pointer; outline: none;
+      appearance: none; -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%239898b8' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 8px center;
+      transition: border-color .12s;
     }
-    .mode-btn:hover { color: var(--text-1); }
-    .mode-btn.active {
-      background: rgba(122,162,247,.15); color: var(--blue);
+    #mode-select:focus { border-color: rgba(122,162,247,.4); }
+    #mode-select option { background: var(--bg-deep); color: var(--text-1); }
+
+    /* ── Mic button ── */
+    #mic-btn {
+      background: var(--bg-raised); border: 1px solid var(--border-md);
+      color: var(--text-2); border-radius: 5px;
+      width: 30px; height: 30px; cursor: pointer;
+      display: none; align-items: center; justify-content: center;
+      font-size: 15px; flex-shrink: 0;
+      transition: background .15s, color .15s, border-color .15s;
     }
+    #mic-btn:hover { background: var(--bg-hover); color: var(--text-1); }
+    #mic-btn.recording {
+      color: var(--red); border-color: rgba(247,118,142,.5);
+      background: rgba(247,118,142,.12);
+      animation: mic-pulse 1s ease-in-out infinite;
+    }
+    @keyframes mic-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .6; } }
+
+    /* ── Speech status line ── */
+    #speech-status {
+      font-size: 11px; color: var(--text-3); font-style: italic; display: none;
+    }
+    #speech-status.visible { display: inline; }
 
     /* ── Narrative player (inside assistant bubble) ── */
     .narrative-player { display: flex; flex-direction: column; gap: 10px; }
@@ -609,18 +631,17 @@
   <div id="left-pane">
     <div id="chat-header">
       <h2>Assistant</h2>
-      <div id="mode-toggle" role="tablist" aria-label="Chat mode">
-        <button class="mode-btn active" data-mode="qa">Q&amp;A</button>
-        <button class="mode-btn" data-mode="narrative">Narrative</button>
-      </div>
+      <select id="mode-select" aria-label="Chat mode"></select>
     </div>
     <div id="messages"></div>
     <div id="input-area">
       <div id="input-wrap">
         <textarea id="chat-input" rows="1" placeholder="Ask anything about this codebase…"></textarea>
+        <button id="mic-btn" title="Click to record voice">🎙</button>
         <button id="send-btn">↑</button>
       </div>
       <span id="input-hint">Enter to send · Shift+Enter for newline</span>
+      <span id="speech-status"></span>
     </div>
   </div>
 
@@ -1407,6 +1428,155 @@ function narrativeRender(data, bubble) {
   renderStep(0);
 }
 
+// ── Speech mode ───────────────────────────────────────────────────────────────
+// State shared across recording session and speechSend/speechRender
+let _pendingSpeechAudio = null;  // Blob from last recording, consumed by speechSend
+let _speechRecording    = false;
+let _mediaRecorder      = null;
+let _audioChunks        = [];
+let _speechRecognition  = null;
+
+async function startRecording(micBtn) {
+  if (_speechRecording) return;
+  _pendingSpeechAudio = null;
+  _audioChunks = [];
+
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch (_) {
+    const statusEl = document.getElementById("speech-status");
+    if (statusEl) { statusEl.textContent = "Mic access denied"; statusEl.classList.add("visible"); }
+    return;
+  }
+
+  _speechRecording = true;
+  micBtn.classList.add("recording");
+  micBtn.title = "Click to stop recording";
+  const statusEl = document.getElementById("speech-status");
+  if (statusEl) { statusEl.textContent = "Recording…"; statusEl.classList.add("visible"); }
+
+  _mediaRecorder = new MediaRecorder(stream);
+  _mediaRecorder.ondataavailable = e => { if (e.data.size > 0) _audioChunks.push(e.data); };
+  _mediaRecorder.onstop = () => {
+    _pendingSpeechAudio = new Blob(_audioChunks, { type: "audio/webm" });
+    stream.getTracks().forEach(t => t.stop());
+  };
+  _mediaRecorder.start();
+
+  // Browser STT provides the transcript as the user speaks
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (SR) {
+    try {
+      _speechRecognition = new SR();
+      _speechRecognition.continuous = true;
+      _speechRecognition.interimResults = true;
+      _speechRecognition.onresult = e => {
+        let t = "";
+        for (const r of e.results) t += r[0].transcript;
+        inputEl.value = t;
+        inputEl.style.height = "auto";
+        inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + "px";
+      };
+      _speechRecognition.onerror = () => {};
+      _speechRecognition.start();
+    } catch (_) { _speechRecognition = null; }
+  }
+}
+
+function stopRecording(micBtn) {
+  if (!_speechRecording) return;
+  _speechRecording = false;
+  micBtn.classList.remove("recording");
+  micBtn.title = "Click to record voice";
+  const statusEl = document.getElementById("speech-status");
+  if (statusEl) { statusEl.textContent = "Ready — press Send"; }
+  if (_mediaRecorder && _mediaRecorder.state !== "inactive") _mediaRecorder.stop();
+  if (_speechRecognition) {
+    try { _speechRecognition.stop(); } catch (_) {}
+    _speechRecognition = null;
+  }
+}
+
+async function speechSend(text) {
+  const body = { repo_id: REPO_ID, transcript: text };
+
+  if (_pendingSpeechAudio) {
+    const ab = await _pendingSpeechAudio.arrayBuffer();
+    const bytes = new Uint8Array(ab);
+    let bin = "";
+    bytes.forEach(b => { bin += String.fromCharCode(b); });
+    body.audio_base64 = btoa(bin);
+    _pendingSpeechAudio = null;
+  }
+
+  const res = await fetch(`${API}/speech`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || "Speech query failed");
+  return data;
+}
+
+function speechRender(data, bubble) {
+  bubble.innerHTML = "";
+
+  // If VoiceChat returned audio, render a player and auto-play
+  if (data.audio_base64) {
+    try {
+      const bytes = atob(data.audio_base64);
+      const arr = new Uint8Array(bytes.length);
+      for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+      const blob = new Blob([arr], { type: "audio/wav" });
+      const url = URL.createObjectURL(blob);
+      const audioEl = document.createElement("audio");
+      audioEl.controls = true;
+      audioEl.src = url;
+      audioEl.style.cssText = "width:100%;margin-bottom:10px;border-radius:4px;";
+      bubble.appendChild(audioEl);
+      audioEl.play().catch(() => {});
+    } catch (_) {}
+  }
+
+  // Text answer (fallback path or alongside audio)
+  if (data.answer) {
+    const citations = (data.citations || []).map(c => ({
+      path: c.file_path, start_line: c.start_line, end_line: c.end_line || c.start_line,
+    }));
+    const answerDiv = document.createElement("div");
+    answerDiv.innerHTML = formatAnswer(data.answer, citations);
+    answerDiv.querySelectorAll(".inline-cite").forEach(chip => {
+      chip.addEventListener("click", () =>
+        openCodeViewer(chip.dataset.path, +chip.dataset.start, +chip.dataset.end));
+    });
+    bubble.appendChild(answerDiv);
+
+    if (citations.length) {
+      const chips = document.createElement("div");
+      chips.className = "citations";
+      citations.forEach(c => {
+        const chip = document.createElement("span");
+        chip.className = "cite-chip";
+        const endStr = c.end_line !== c.start_line ? `-${c.end_line}` : "";
+        chip.textContent = `${c.path}:${c.start_line}${endStr}`;
+        chip.addEventListener("click", () => openCodeViewer(c.path, c.start_line, c.end_line));
+        chips.appendChild(chip);
+      });
+      bubble.appendChild(chips);
+    }
+  }
+
+  if (!data.answer && !data.audio_base64) {
+    bubble.innerHTML = `<span style="color:var(--text-2)">No response received.</span>`;
+  }
+
+  // Clear speech status after render
+  const statusEl = document.getElementById("speech-status");
+  if (statusEl) { statusEl.textContent = ""; statusEl.classList.remove("visible"); }
+}
+
 const ChatModes = {
   qa: {
     id: "qa",
@@ -1422,26 +1592,67 @@ const ChatModes = {
     send: narrativeSend,
     render: narrativeRender,
   },
-  // future modes (speech-to-speech, debate, etc.) plug in here
+  speech: {
+    id: "speech",
+    label: "Speech",
+    placeholder: "Speak or type a question about this codebase…",
+    send: speechSend,
+    render: speechRender,
+  },
 };
 
 let currentMode = ChatModes.qa;
 
 function setChatMode(modeId) {
+  // Stop recording when leaving speech mode
+  if (currentMode && currentMode.id === "speech" && modeId !== "speech") {
+    const mb = document.getElementById("mic-btn");
+    if (_speechRecording && mb) stopRecording(mb);
+    _pendingSpeechAudio = null;
+    const statusEl = document.getElementById("speech-status");
+    if (statusEl) { statusEl.textContent = ""; statusEl.classList.remove("visible"); }
+  }
   const mode = ChatModes[modeId];
   if (!mode) return;
   currentMode = mode;
   inputEl.placeholder = mode.placeholder;
-  document.querySelectorAll(".mode-btn").forEach(btn => {
-    btn.classList.toggle("active", btn.dataset.mode === mode.id);
-  });
+  const sel = document.getElementById("mode-select");
+  if (sel && sel.value !== mode.id) sel.value = mode.id;
+  const micBtn = document.getElementById("mic-btn");
+  if (micBtn) micBtn.style.display = modeId === "speech" ? "flex" : "none";
 }
 
-document.querySelectorAll(".mode-btn").forEach(btn => {
-  btn.addEventListener("click", () => setChatMode(btn.dataset.mode));
-});
+// Populate the mode dropdown from the ChatModes registry and wire change event
+(function initModeSelect() {
+  const sel = document.getElementById("mode-select");
+  if (!sel) return;
+  Object.values(ChatModes).forEach(m => {
+    const opt = document.createElement("option");
+    opt.value = m.id;
+    opt.textContent = m.label;
+    sel.appendChild(opt);
+  });
+  sel.value = currentMode.id;
+  sel.addEventListener("change", e => setChatMode(e.target.value));
+})();
+
+// Wire mic button: click to start, click again to stop
+(function initMicBtn() {
+  const micBtn = document.getElementById("mic-btn");
+  if (!micBtn) return;
+  micBtn.addEventListener("click", () => {
+    if (_speechRecording) {
+      stopRecording(micBtn);
+    } else {
+      startRecording(micBtn);
+    }
+  });
+})();
 
 async function sendMessage() {
+  // Stop any active voice recording so the audio blob is finalized before sending
+  const _micBtnEl = document.getElementById("mic-btn");
+  if (_speechRecording && _micBtnEl) stopRecording(_micBtnEl);
   const text = inputEl.value.trim();
   if (!text) return;
   const mode = currentMode;
