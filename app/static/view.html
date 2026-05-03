@@ -1434,7 +1434,19 @@ function narrativeRender(data, bubble) {
     // Auto-switch to System tab so the user can see the new action, and
     // kick off the one-shot animation for this step.
     if (currentLayer !== "system") activateTab("system");
-    if (window.__systemDiagram) window.__systemDiagram.setActiveStep(s);
+    if (window.__systemDiagram) {
+      if (window.__systemDiagram.isLoaded()) {
+        window.__systemDiagram.setActiveStep(s);
+      } else {
+        // Diagram still loading — wait for it then apply the step
+        const waitAndApply = setInterval(() => {
+          if (window.__systemDiagram.isLoaded()) {
+            clearInterval(waitAndApply);
+            window.__systemDiagram.setActiveStep(s);
+          }
+        }, 300);
+      }
+    }
 
     updateZoomButton(s);
     applyZoomButtonState();

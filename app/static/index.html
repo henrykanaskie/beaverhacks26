@@ -172,16 +172,24 @@
       margin-bottom: 8px; padding: 0 6px;
     }
     #recent-list { list-style: none; padding: 0; margin: 0; }
-    #recent-list li { border-radius: 6px; }
+    #recent-list li { border-radius: 6px; display: flex; align-items: center; }
     #recent-list li:hover { background: var(--bg-hover); }
+    #recent-list li:hover .del-btn { opacity: 1; }
     #recent-list a {
       display: flex; align-items: center; justify-content: space-between;
-      gap: 12px; padding: 7px 6px;
+      gap: 12px; padding: 7px 6px; flex: 1; min-width: 0;
       text-decoration: none; color: var(--text-1);
     }
     #recent-list .name { font-size: 13px; font-weight: 500; flex-shrink: 0; }
     #recent-list .rel { font-size: 12px; color: var(--text-3); flex-shrink: 0; }
     #recent-empty { font-size: 12px; color: var(--text-3); padding: 0 6px; }
+    .del-btn {
+      opacity: 0; flex-shrink: 0; margin-right: 4px;
+      background: none; border: none; cursor: pointer;
+      font-size: 11px; color: var(--text-3); padding: 4px 6px;
+      border-radius: 4px; transition: color .15s, background .15s;
+    }
+    .del-btn:hover { color: #f7768e; background: rgba(247,118,142,.12); }
 
     #index-error {
       margin-top: 14px; width: 100%; padding: 10px 12px;

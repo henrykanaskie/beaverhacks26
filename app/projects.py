@@ -70,6 +70,8 @@ def _sync_missing_from_chroma() -> None:
                 continue
             if n <= 0:
                 continue
+            if not os.path.exists(f"deps/{name}_files.json"):
+                continue
             # URL is unknown for legacy entries; UI falls back to repo_id label.
             entries.insert(0, {
                 "repo_id": name,
@@ -101,6 +103,25 @@ def _project_display_name(entry: dict) -> str:
             pass
         return repo_url
     return "Unlabeled indexed repo"
+
+
+@router.delete("/projects/{repo_id}")
+def delete_project(repo_id: str):
+    with _LOCK:
+        entries = [e for e in _read() if e.get("repo_id") != repo_id]
+        _write_atomic(entries)
+    # Remove Chroma collection and deps files if present
+    try:
+        get_client().delete_collection(name=repo_id)
+    except Exception:
+        pass
+    for suffix in ("_files.json", "_deps.json", "_system.json"):
+        path = f"deps/{repo_id}{suffix}"
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+    return {"status": "deleted", "repo_id": repo_id}
 
 
 @router.get("/projects")
