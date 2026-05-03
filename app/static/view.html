@@ -314,9 +314,8 @@
 <div id="topbar">
   <span class="logo">⬡ Nemotron RAG</span>
   <span class="sep">/</span>
-  <span class="repo">pallets / flask</span>
-  <span class="demo-pill">demo</span>
-  <span class="indexed-badge">● 83 files indexed</span>
+  <span class="repo" id="topbar-repo">loading…</span>
+  <span class="indexed-badge" id="topbar-indexed"></span>
 </div>
 
 <div id="app">
@@ -389,6 +388,18 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
 <script>
+// ── API / repo config ─────────────────────────────────────────────────────────
+const API = "http://localhost:8000";
+const _urlParams = new URLSearchParams(location.search);
+const REPO_ID    = _urlParams.get("repo_id") || null;
+const REPO_URL   = decodeURIComponent(_urlParams.get("url") || "");
+const REPO_LABEL = REPO_URL
+  ? REPO_URL.replace(/https?:\/\/(github|gitlab)\.com\//i, "")
+  : (REPO_ID ? REPO_ID.slice(0, 8) + "…" : "demo");
+if (!REPO_ID) { window.location.href = "index.html"; }
+
+let currentScope = null;
+
 // ── Mock data ──────────────────────────────────────────────────────────────────
 
 const FILES = {
@@ -433,41 +444,6 @@ const ARCH_TREE = {
   ]
 };
 
-// Mock responses — type: "answer" | "trace"
-const RESPONSES = [
-  {
-    type: "answer",
-    q: "How does routing work in Flask?",
-    a: `Flask routing is built on Werkzeug's URL engine. <code>@app.route('/path')</code> calls <code>add_url_rule</code>, which creates a <code>Rule</code> and registers it on the app's <code>url_map</code>.\n\nAt request time, <code>wsgi_app</code> pushes a request context and dispatches through the bound <code>MapAdapter</code>.`,
-    citations: [
-      { path: "src/flask/app.py",     line: 56 },
-      { path: "src/flask/app.py",     line: 64 },
-      { path: "src/flask/routing.py", line: 22 },
-    ]
-  },
-  {
-    type: "trace",
-    q: "What files depend on __init__.py?",
-    source: "src/flask/__init__.py",
-    a: `I traced the dependencies for <code>src/flask/__init__.py</code>. It's the public API surface, so several modules import from it directly.`,
-    affected: [
-      { path: "src/flask/app.py",        type: "direct" },
-      { path: "src/flask/ctx.py",        type: "direct" },
-      { path: "src/flask/helpers.py",    type: "direct" },
-      { path: "src/flask/templating.py", type: "transitive" },
-      { path: "tests/test_basic.py",     type: "transitive" },
-    ]
-  },
-  {
-    type: "answer",
-    q: "How does flash messaging work?",
-    a: `Flash messages are stored in the session under <code>_flashes</code> as <code>(category, message)</code> tuples. <code>flash()</code> appends and fires the signal; <code>get_flashed_messages()</code> pops and returns them on the next request.`,
-    citations: [
-      { path: "src/flask/helpers.py", line: 18 },
-      { path: "src/flask/helpers.py", line: 30 },
-    ]
-  },
-];
 
 // ── Canvas layer / tab control ────────────────────────────────────────────────
 
@@ -513,8 +489,18 @@ document.getElementById("tab-arch").addEventListener("click", () => activateTab(
 
 // ── Code viewer ────────────────────────────────────────────────────────────────
 
-function openCodeViewer(filePath, targetLine) {
-  const file = FILES[filePath];
+async function openCodeViewer(filePath, targetLine) {
+  let file = FILES[filePath];
+  if (!file && REPO_ID) {
+    try {
+      const res = await fetch(`${API}/file/${encodeURIComponent(REPO_ID)}?path=${encodeURIComponent(filePath)}`);
+      if (res.ok) {
+        const data = await res.json();
+        file = { language: data.language, content: data.content };
+        FILES[filePath] = file;
+      }
+    } catch (_) { /* skip */ }
+  }
   if (!file) return;
 
   const parts = filePath.split("/");
@@ -600,7 +586,6 @@ function openTrace(source, affected) {
 const messagesEl = document.getElementById("messages");
 const inputEl    = document.getElementById("chat-input");
 const sendBtn    = document.getElementById("send-btn");
-let responseIdx  = 0;
 
 function esc(s) {
   return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
@@ -656,39 +641,107 @@ function showThinking() {
 }
 function removeThinking() { document.getElementById("_thinking")?.remove(); }
 
-function sendMessage() {
+function formatAnswer(text) {
+  let html = esc(text);
+  // Fenced code blocks
+  html = html.replace(/```[\w]*\n([\s\S]*?)```/g, (_, code) =>
+    `<pre style="background:rgba(255,255,255,.05);padding:10px 14px;border-radius:6px;overflow-x:auto;font-family:var(--font-code);font-size:12px;margin:8px 0;white-space:pre-wrap"><code>${code}</code></pre>`);
+  // Inline code
+  html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+  // Newlines
+  html = html.replace(/\n/g, '<br>');
+  return html;
+}
+
+async function sendMessage() {
   const text = inputEl.value.trim();
   if (!text) return;
   inputEl.value = ""; inputEl.style.height = "auto";
   sendBtn.disabled = true;
   appendMsg("user", esc(text));
   showThinking();
-  const r = RESPONSES[responseIdx % RESPONSES.length];
-  responseIdx++;
-  setTimeout(() => {
+  try {
+    const res = await fetch(`${API}/query`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ repo_id: REPO_ID, question: text, scope: currentScope || null }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Query failed");
     removeThinking();
-    appendMsg("assistant", r.a, r);
+    const response = {
+      type: "answer",
+      citations: (data.citations || []).map(c => ({ path: c.file_path, line: c.start_line })),
+    };
+    appendMsg("assistant", formatAnswer(data.answer), response);
+  } catch (err) {
+    removeThinking();
+    appendMsg("assistant", `<span style="color:var(--red)">${esc(String(err.message || err))}</span>`, null);
+  } finally {
     sendBtn.disabled = false;
-  }, 800 + Math.random() * 600);
+  }
 }
 
 sendBtn.addEventListener("click", sendMessage);
 inputEl.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
 inputEl.addEventListener("input", () => { inputEl.style.height = "auto"; inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + "px"; });
 
-// Seed
-appendMsg("assistant", `I've indexed <strong>83 files</strong> from <code>pallets/flask</code>. Ask how routing works, what a module exports, or what depends on a file — I'll surface the right view automatically.`, null);
-appendMsg("user", esc(RESPONSES[0].q));
-showThinking();
-setTimeout(() => { removeThinking(); appendMsg("assistant", RESPONSES[0].a, RESPONSES[0]); responseIdx = 1; }, 1400);
+// Update topbar repo label immediately
+document.getElementById("topbar-repo").textContent = REPO_LABEL;
+
+// Seed — fetch file count then greet
+(async () => {
+  try {
+    const res = await fetch(`${API}/files/${encodeURIComponent(REPO_ID)}`);
+    const data = res.ok ? await res.json() : null;
+    const count = data?.files?.length ?? "?";
+    document.getElementById("topbar-indexed").textContent = `● ${count} files indexed`;
+    appendMsg("assistant",
+      `I've indexed <strong>${count} file${count !== 1 ? "s" : ""}</strong> from <code>${esc(REPO_LABEL)}</code>. Ask me anything — how a function works, what a module exports, or what depends on a given file.`,
+      null);
+  } catch {
+    appendMsg("assistant",
+      `Ready. Ask me anything about <code>${esc(REPO_LABEL)}</code>.`,
+      null);
+  }
+})();
 
 // ── Architecture D3 ────────────────────────────────────────────────────────────
 
-(function initArch() {
+function _buildArchTree(files, repoLabel) {
+  const root = { id: "/", name: repoLabel || "repo", type: "folder", children: [] };
+  const map = { "/": root };
+  const langMap = { py:"python", js:"javascript", ts:"typescript", tsx:"tsx", jsx:"javascript",
+    go:"go", rs:"rust", java:"java", cpp:"cpp", cs:"c_sharp" };
+  files.sort().forEach(filePath => {
+    const parts = filePath.split("/");
+    let parentId = "/";
+    parts.forEach((part, i) => {
+      const isLeaf = i === parts.length - 1;
+      const nodeId = parentId === "/" ? part : parentId + "/" + part;
+      if (!map[nodeId]) {
+        const ext = part.split(".").pop();
+        const node = {
+          id: nodeId, name: part,
+          type: isLeaf ? "file" : "folder",
+          language: isLeaf ? (langMap[ext] || "unknown") : undefined,
+          children: isLeaf ? undefined : [],
+        };
+        map[nodeId] = node;
+        (map[parentId].children = map[parentId].children || []).push(node);
+      }
+      parentId = nodeId;
+    });
+  });
+  return root;
+}
+
+function initArch(treeData) {
   const container = document.getElementById("layer-arch");
   const W = container.clientWidth || 800;
   const H = container.clientHeight || 600;
   const svg = d3.select("#arch-svg");
+  svg.selectAll("*").remove();
   const g = svg.append("g");
 
   const zoom = d3.zoom().scaleExtent([0.15, 4]).on("zoom", e => g.attr("transform", e.transform));
@@ -697,7 +750,7 @@ setTimeout(() => { removeThinking(); appendMsg("assistant", RESPONSES[0].a, RESP
   const resetView = () =>
     svg.transition().duration(350).call(zoom.transform, d3.zoomIdentity.translate(W * 0.1, H / 2).scale(0.88));
 
-  const root = d3.hierarchy(ARCH_TREE);
+  const root = d3.hierarchy(treeData);
   root.x0 = H / 2; root.y0 = 0;
   root.descendants().forEach(d => {
     if (d.depth >= 2 && d.children) { d._children = d.children; d.children = null; }
@@ -756,6 +809,18 @@ setTimeout(() => { removeThinking(); appendMsg("assistant", RESPONSES[0].a, RESP
     update(root);
   };
   window.resetArchZoom = resetView;
+}
+
+// Start with an empty placeholder, then load real file tree
+initArch({ id: "/", name: REPO_LABEL, type: "folder", children: [] });
+(async () => {
+  try {
+    const res = await fetch(`${API}/files/${encodeURIComponent(REPO_ID)}`);
+    if (res.ok) {
+      const data = await res.json();
+      initArch(_buildArchTree(data.files, REPO_LABEL));
+    }
+  } catch (_) { /* arch stays empty — not critical */ }
 })();
 
 // ── Resizable divider ──────────────────────────────────────────────────────────
