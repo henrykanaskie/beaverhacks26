@@ -1,4 +1,5 @@
 import hashlib
+import json
 import os
 import shutil
 import stat
@@ -13,7 +14,8 @@ from llama_index.embeddings.nomic import NomicEmbedding
 from pydantic import BaseModel
 
 from constants import EXCLUDE_DIRS, INCLUDE_EXTENSIONS, LANGUAGE_MAP
-from db import collection_exists, get_or_create_collection
+from db import collection_exists, get_client, get_or_create_collection
+from deps_builder import build_dependency_graph
 
 
 def _force_remove_readonly(func, path, _exc_info):
@@ -265,8 +267,35 @@ async def index_repo(request: IndexRequest):
         collection = get_or_create_collection(repo_id)
         return {"repo_id": repo_id, "status": "already_indexed", "chunk_count": collection.count()}
 
-    # Remaining steps implemented by ING-02 through ING-07
-    raise HTTPException(status_code=501, detail="Indexing not yet implemented")
+    clone_path: str | None = None
+    try:
+        clone_path = clone_repo(request.repo_url, repo_id)
+        files = collect_files(clone_path)
+        chunks = chunk_files(files)
+        build_dependency_graph(files, clone_path, repo_id)
+        chunk_count = embed_and_store(chunks, repo_id)
+
+        os.makedirs("deps", exist_ok=True)
+        with open(f"deps/{repo_id}_files.json", "w", encoding="utf-8") as fh:
+            json.dump([f["rel_path"] for f in files], fh)
+
+        return {"repo_id": repo_id, "status": "indexed", "chunk_count": chunk_count}
+    except HTTPException:
+        # Roll back partial Chroma writes so the repo isn't half-indexed
+        try:
+            get_client().delete_collection(repo_id)
+        except Exception:
+            pass
+        raise
+    except Exception as e:
+        try:
+            get_client().delete_collection(repo_id)
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail=f"Indexing failed: {e}")
+    finally:
+        if clone_path:
+            cleanup_clone(repo_id)
 
 
 @router.get("/status/{repo_id}")
