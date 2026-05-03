@@ -247,6 +247,19 @@ def embed_and_store(chunks: list[dict], repo_id: str) -> int:
     if not chunks:
         return 0
 
+    # CodeSplitter's overlap windows can emit byte-identical chunks for the same
+    # file, which collide on _chunk_id and trigger Chroma's unique-id constraint.
+    # Identical chunks carry no extra signal, so drop the dupes.
+    seen_ids: set[str] = set()
+    deduped: list[dict] = []
+    for c in chunks:
+        cid = _chunk_id(repo_id, c)
+        if cid in seen_ids:
+            continue
+        seen_ids.add(cid)
+        deduped.append(c)
+    chunks = deduped
+
     embed_model, provider = _get_embed_model()
     collection = get_or_create_collection(repo_id)
     total_stored = 0

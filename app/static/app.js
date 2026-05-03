@@ -61,12 +61,9 @@ function pollStatus(repoId) {
 }
 
 function onIndexingComplete(repoId, chunkCount) {
-  document.getElementById("index-status").hidden = true;
-  document.getElementById("index-section").style.opacity = "0.5";
-  document.getElementById("index-btn").disabled = false;
-  document.getElementById("main-section").hidden = false;
   window.__repoId = repoId;
-  window.__onIndexed(repoId);
+  const viewUrl = `view.html?repo_id=${encodeURIComponent(repoId)}&url=${encodeURIComponent(_lastIndexedUrl || "")}`;
+  window.location.href = viewUrl;
 }
 
 function showError(msg) {

@@ -4,28 +4,226 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AccliMate</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-deep:   #16161e;
+      --bg-main:   #1e1e2e;
+      --bg-raised: #24243a;
+      --bg-hover:  #2d2d45;
+      --bg-active: #333350;
+      --border:    rgba(255,255,255,0.07);
+      --border-md: rgba(255,255,255,0.12);
+      --text-1: #e4e4f0;
+      --text-2: #9898b8;
+      --text-3: #55556a;
+      --blue:   #7aa2f7;
+      --purple: #bb9af7;
+      --cyan:   #7dcfff;
+      --green:  #9ece6a;
+      --yellow: #e0af68;
+      --red:    #f7768e;
+      --font-ui:   'Inter', system-ui, sans-serif;
+      --font-code: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+    }
+
+    html, body {
+      min-height: 100%;
+      background: var(--bg-main); color: var(--text-1);
+      font-family: var(--font-ui); font-size: 14px; line-height: 1.5;
+    }
+
+    /* ── Top bar ── */
+    #topbar {
+      height: 40px; background: var(--bg-deep);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; padding: 0 16px; gap: 10px;
+    }
+    .logo { font-size: 13px; font-weight: 600; color: var(--purple); letter-spacing: .02em; }
+    .repo { font-family: var(--font-code); font-size: 12px; color: var(--text-2); }
+    .sep  { color: var(--text-3); }
+    .demo-pill {
+      font-size: 11px; padding: 2px 8px; border-radius: 4px;
+      background: rgba(224,175,104,.12); color: var(--yellow);
+      border: 1px solid rgba(224,175,104,.22);
+    }
+
+    /* ── Shell ── */
+    #app {
+      max-width: 960px; margin: 0 auto;
+      padding: 32px 24px 64px;
+      display: flex; flex-direction: column; gap: 24px;
+    }
+
+    /* ── Index card ── */
+    #index-section {
+      background: var(--bg-raised);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 28px 28px 24px;
+    }
+    #index-section h1 {
+      font-size: 22px; font-weight: 600;
+      color: var(--text-1); letter-spacing: -.01em;
+      margin-bottom: 4px;
+    }
+    .subtitle {
+      font-size: 13px; color: var(--text-2); margin-bottom: 20px;
+    }
+
+    #repo-form {
+      display: flex; gap: 8px; align-items: stretch;
+      background: var(--bg-active); border: 1px solid var(--border-md);
+      border-radius: 8px; padding: 6px;
+      transition: border-color .15s;
+    }
+    #repo-form:focus-within { border-color: rgba(122,162,247,.4); }
+
+    #repo-url {
+      flex: 1; min-width: 0;
+      background: none; border: none; outline: none;
+      color: var(--text-1);
+      font-family: var(--font-code); font-size: 13px;
+      padding: 8px 10px;
+    }
+    #repo-url::placeholder { color: var(--text-3); }
+
+    #index-btn {
+      background: var(--blue); color: #16161e;
+      border: none; border-radius: 5px;
+      padding: 0 16px; min-height: 32px;
+      font-family: var(--font-ui); font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: opacity .15s;
+      flex-shrink: 0;
+    }
+    #index-btn:hover { opacity: .85; }
+    #index-btn:disabled { opacity: .35; cursor: default; }
+
+    #index-status {
+      margin-top: 14px; display: flex; align-items: center; gap: 10px;
+      font-family: var(--font-code); font-size: 12px; color: var(--text-2);
+    }
+    .spinner {
+      width: 12px; height: 12px;
+      border: 2px solid var(--border-md);
+      border-top-color: var(--blue);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #index-error {
+      margin-top: 14px; padding: 10px 12px;
+      font-size: 12.5px; font-family: var(--font-code);
+      background: rgba(247,118,142,.08);
+      color: var(--red);
+      border: 1px solid rgba(247,118,142,.22);
+      border-radius: 6px;
+    }
+
+    /* ── Main section / file tree ── */
+    #main-section {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 16px;
+      align-items: start;
+    }
+
+    #file-tree {
+      background: var(--bg-raised);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+      max-height: 70vh; overflow: auto;
+      scrollbar-width: thin; scrollbar-color: var(--bg-hover) transparent;
+    }
+    #file-tree h3 {
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: .08em; color: var(--text-2);
+      padding: 4px 4px 10px; margin: 0;
+    }
+    #file-tree ul {
+      list-style: none; padding-left: 14px; margin: 0;
+    }
+    #file-tree > ul { padding-left: 0; }
+
+    .file-node, .folder-node {
+      cursor: pointer; user-select: none;
+      padding: 3px 6px; border-radius: 4px;
+      font-family: var(--font-code); font-size: 12px;
+      color: var(--text-1); line-height: 1.7;
+      transition: background .12s, color .12s;
+    }
+    .file-node { color: var(--text-2); }
+    .file-node:hover { background: var(--bg-hover); color: var(--text-1); }
+
+    .folder-node > .folder-label {
+      display: inline-block;
+      padding: 2px 6px; border-radius: 4px;
+      font-weight: 500; color: var(--text-1);
+      transition: background .12s;
+    }
+    .folder-label:hover { background: var(--bg-hover); }
+
+    .file-node.selected,
+    .folder-node.selected > .folder-label {
+      background: rgba(122,162,247,.12);
+      color: var(--blue);
+    }
+
+    .error {
+      padding: 12px 14px;
+      font-size: 13px; font-family: var(--font-code);
+      background: rgba(247,118,142,.08);
+      color: var(--red);
+      border: 1px solid rgba(247,118,142,.22);
+      border-radius: 8px;
+    }
+
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--bg-hover); border-radius: 3px; }
+
+    @media (max-width: 720px) {
+      #main-section { grid-template-columns: 1fr; }
+    }
+  </style>
 </head>
 <body>
-  <div id="app">
-    <section id="index-section">
-      <h1>AccliMate</h1>
-      <div id="repo-form">
-        <input type="url" id="repo-url" placeholder="https://github.com/owner/repo"
-               required pattern="https://(github|gitlab)\.com/.*">
-        <button id="index-btn" onclick="startIndexing()">Index repo</button>
-      </div>
-      <div id="index-status" hidden>
-        <span id="status-text">Cloning and indexing...</span>
-        <span class="spinner"></span>
-      </div>
-      <div id="index-error" hidden></div>
-    </section>
 
-    <section id="main-section" hidden>
-      <!-- FE-02 (file tree) injects here. FE-03+ inject as backends land. -->
-    </section>
-  </div>
-  <script src="app.js"></script>
+<div id="topbar">
+  <span class="logo">&#x29E1; AccliMate</span>
+  <span class="sep">/</span>
+  <span class="repo">code indexer</span>
+  <span class="demo-pill">demo</span>
+</div>
+
+<div id="app">
+  <section id="index-section">
+    <h1>Nemotron Code RAG</h1>
+    <p class="subtitle">Paste a public GitHub or GitLab repository URL to clone, chunk, and embed it.</p>
+
+    <div id="repo-form">
+      <input type="url" id="repo-url" placeholder="https://github.com/owner/repo"
+             required pattern="https://(github|gitlab)\.com/.*">
+      <button id="index-btn" onclick="startIndexing()">Index repo</button>
+    </div>
+
+    <div id="index-status" hidden>
+      <span class="spinner"></span>
+      <span id="status-text">Cloning and indexing...</span>
+    </div>
+    <div id="index-error" hidden></div>
+  </section>
+
+  <section id="main-section" hidden>
+    <!-- FE-02 (file tree) injects here. FE-03+ inject as backends land. -->
+  </section>
+</div>
+
+<script src="app.js"></script>
 </body>
 </html>
